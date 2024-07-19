@@ -99,7 +99,10 @@ class RayTrace:
     def _initialize_reference(self) -> tuple[float, float, float, float]:
         return self.source.depth, self.source.distance, 0.0, 0.0
 
-    def plot(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
+    def plot(self) -> plt.Axes:
+        return rplt.plot_ray_trace(self)
+    
+    def plot_rays(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
         return rplt.plot_rays(self.rays, ax=ax, *args, **kwargs)
 
     @staticmethod
