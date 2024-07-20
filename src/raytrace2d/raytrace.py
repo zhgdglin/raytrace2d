@@ -68,9 +68,9 @@ class RayTrace:
         y = np.array(y).squeeze()
         tmp_x = y[0] + x_ref
         tmp_z = y[2] + z_ref
-        slw = self.profile(tmp_x, tmp_z)
-        dslwdz, dslwdx = self.profile.slowness_gradient(tmp_x, tmp_z)
-        return np.array([y[1] / slw, dslwdx, y[3] / slw, dslwdz, slw]).T
+        slw = self.profile(tmp_z, tmp_x)
+        dslwdz, dslwdx = self.profile.slowness_gradient(tmp_z, tmp_x)
+        return np.array([y[1] / slw, dslwdx, y[3] / slw, dslwdz, slw])
 
     def find_eigenrays(self):
         return
@@ -101,7 +101,7 @@ class RayTrace:
 
     def plot(self) -> plt.Axes:
         return rplt.plot_ray_trace(self)
-    
+
     def plot_rays(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
         return rplt.plot_rays(self.rays, ax=ax, *args, **kwargs)
 
@@ -138,14 +138,21 @@ class RayTrace:
         ds: float = 10.0,
         max_bottom_bounce: int = 9999,
     ) -> Ray:
+
+        # Slowness at source
         slw0 = self.profile(self.source.depth, self.source.distance)
+        # Change in x in the direction of the ray
+        print(slw0)
         dxds0 = np.cos(angle * DEG2RAD)
+        print("dxds0 ", dxds0)
+        # Change in z in the direction of the ray
         dzds0 = np.sin(angle * DEG2RAD)
+        print("dzds0 ", dzds0)
         xi0 = dxds0 * slw0
         zeta0 = dzds0 * slw0
 
-        # Initialize events
         z_ref, x_ref, tau_ref, s_ref = self._initialize_reference()
+        # Initialize events
 
         ivp_events = [
             events.SurfaceReflection(),
@@ -166,13 +173,13 @@ class RayTrace:
         s = np.array([])  # arc length
         tang = np.array([])  # ray tangent angle
         num_btm_bnc = 0
-        t_events = []
-        yevents = []
+        # t_events = []
+        # yevents = []
 
         while True:
             # recall: y = [x, dxi/ds, z, dzeta/ds, tau]
-            y0 = np.array([x0 - x_ref, xi0, z0 - z_ref, zeta0, tau0 - tau_ref])
-            yevents.append(y0)
+            y0 = np.array([x0 - x_ref, xi0, z0 - z_ref, zeta0, tau0 - tau_ref]).T
+            # yevents.append(y0)
 
             sol = solve_ivp(
                 lambda s, y, z_ref, x_ref: self._eikonal(s, y, z_ref, x_ref),
@@ -189,7 +196,7 @@ class RayTrace:
 
             event_id, min_t = self._find_event(sol.t_events)
 
-            t_events.append(min_t)
+            # t_events.append(min_t)
             t_arr = np.arange(0.0, sol.t[-1] + ds, ds)
             t_arr = t_arr[t_arr < min_t]  # Exclude termination point
             y = sol.sol(t_arr).T
@@ -228,18 +235,18 @@ class RayTrace:
                 or event_id == events.Events.MAX_TIME_REACHED.value
             ):
 
-                z = np.append(z, event_y[2] + z_ref)
                 x = np.append(x, event_y[0] + x_ref)
+                z = np.append(z, event_y[2] + z_ref)
                 s = np.append(s, min_t + s_ref)
                 tau = np.append(tau, event_y[4] + tau_ref)
                 tang = np.append(tang, np.arctan2(event_y[3], event_y[1]))
 
                 break
 
-            z0 = event_y[2] + z_ref
-            zeta0 = event_y[3]
             x0 = event_y[0] + x_ref
             xi0 = event_y[1]
+            z0 = event_y[2] + z_ref
+            zeta0 = event_y[3]
             s0 = min_t + s_ref
             tau0 = event_y[4] + tau_ref
 
@@ -249,8 +256,8 @@ class RayTrace:
             xi0 = er[0]
             zeta0 = er[1]
 
-            z_ref = z0
             x_ref = x0
+            z_ref = z0
             s_ref = s0
             tau_ref = tau0
 
@@ -261,7 +268,11 @@ class RayTrace:
             tau=tau,
             tang=tang,
             slw=self.profile(x, z),
-            dslwdx=self.profile.slowness_gradient(x, z)[1],
-            dslwdz=self.profile.slowness_gradient(x, z)[0],
+            dslwdx=np.array(
+                [self.profile.slowness_gradient(xe, ze)[1] for xe, ze in zip(x, z)]
+            ),
+            dslwdz=np.array(
+                [self.profile.slowness_gradient(xe, ze)[0] for xe, ze in zip(x, z)]
+            ),
             reflections=self.reflections,
         )
