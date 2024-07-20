@@ -269,10 +269,10 @@ class RayTrace:
             tang=tang,
             slw=self.profile(x, z),
             dslwdx=np.array(
-                [self.profile.slowness_gradient(xe, ze)[1] for xe, ze in zip(x, z)]
+                [self.profile.slowness_gradient(ze, xe)[1] for ze, xe in zip(z, x)]
             ),
             dslwdz=np.array(
-                [self.profile.slowness_gradient(xe, ze)[0] for xe, ze in zip(x, z)]
+                [self.profile.slowness_gradient(ze, xe)[0] for ze, xe in zip(z, x)]
             ),
             reflections=self.reflections,
         )
