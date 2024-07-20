@@ -65,14 +65,6 @@ class Bathymetry:
         if type(self.distance) is float or len(self.distance) == 1:
             self.distance = np.full_like(self.water_depth, self.distance)
 
-    def _set_interpolator(self):
-        self._interpolator = Interpolator(
-            points=(self.distance,), values=self.water_depth
-        )
-
-    def _query(self, distance: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        return self._interpolator(distance)
-
     def _compute_gradient(self):
         if self.water_depth.shape[0] == 1:
             self.dwdx = np.zeros_like(self.water_depth)
@@ -93,6 +85,14 @@ class Bathymetry:
         if dwdx > 0.0:
             rotation_matrix = np.array([[0, 1], [-1, 0]])
         return np.dot(rotation_matrix, grad_unit_vec)
+
+    def _set_interpolator(self):
+        self._interpolator = Interpolator(
+            points=(self.distance,), values=self.water_depth
+        )
+
+    def _query(self, distance: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+        return self._interpolator(distance)
 
 
 @dataclass(frozen=True)
