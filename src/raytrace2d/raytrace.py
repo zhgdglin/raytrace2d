@@ -73,7 +73,8 @@ class RayTrace:
         return np.array([y[1] / slw, dslwdx, y[3] / slw, dslwdz, slw])
 
     def find_eigenrays(self):
-        return
+        # TODO: Implement this method
+        raise NotImplementedError("Method not implemented.")
 
     @staticmethod
     def _find_event(t_events: list[Union[None, np.ndarray]]) -> tuple[int, float]:
@@ -96,7 +97,27 @@ class RayTrace:
             angle_r=float(np.arctan2(normal_vec[1], normal_vec[0])),
         )
 
-    def _initialize_reference(self) -> tuple[float, float, float, float]:
+    def _initialize_events(self, tau_ref: float = 0.0) -> list[events.Event]:
+        return [
+            events.SurfaceReflection(),
+            partial(events.BottomReflection(), bathymetry=self.bathymetry),
+            partial(events.MaxBoundsReached(), bathymetry=self.bathymetry),
+            partial(events.ZeroDepthReached(), bathymetry=self.bathymetry),
+            partial(events.MaxTimeReached(), tau_ref=tau_ref, t_max=1e10),
+        ]
+
+    def _initialize_launch_vector(self, angle: float) -> tuple[float, float]:
+        # Slowness at source
+        slw0 = self.profile(self.source.depth, self.source.distance)
+        # Change in x in the direction of the ray
+        dxds0 = np.cos(angle * DEG2RAD)
+        # Change in z in the direction of the ray
+        dzds0 = np.sin(angle * DEG2RAD)
+        xi0 = dxds0 * slw0
+        zeta0 = dzds0 * slw0
+        return xi0, zeta0
+
+    def _initialize_references(self) -> tuple[float, float, float, float]:
         return self.source.depth, self.source.distance, 0.0, 0.0
 
     def plot(self) -> plt.Axes:
@@ -139,28 +160,12 @@ class RayTrace:
         max_bottom_bounce: int = 9999,
     ) -> Ray:
 
-        # Slowness at source
-        slw0 = self.profile(self.source.depth, self.source.distance)
-        # Change in x in the direction of the ray
-        print(slw0)
-        dxds0 = np.cos(angle * DEG2RAD)
-        print("dxds0 ", dxds0)
-        # Change in z in the direction of the ray
-        dzds0 = np.sin(angle * DEG2RAD)
-        print("dzds0 ", dzds0)
-        xi0 = dxds0 * slw0
-        zeta0 = dzds0 * slw0
+        xi0, zeta0 = self._initialize_launch_vector(angle)
 
-        z_ref, x_ref, tau_ref, s_ref = self._initialize_reference()
+        z_ref, x_ref, tau_ref, s_ref = self._initialize_references()
         # Initialize events
 
-        ivp_events = [
-            events.SurfaceReflection(),
-            partial(events.BottomReflection(), bathymetry=self.bathymetry),
-            partial(events.MaxBoundsReached(), bathymetry=self.bathymetry),
-            partial(events.ZeroDepthReached(), bathymetry=self.bathymetry),
-            partial(events.MaxTimeReached(), tau_ref=tau_ref, t_max=1e10),
-        ]
+        ivp_events = self._initialize_events(tau_ref)
 
         z0 = z_ref
         x0 = x_ref
@@ -173,13 +178,10 @@ class RayTrace:
         s = np.array([])  # arc length
         tang = np.array([])  # ray tangent angle
         num_btm_bnc = 0
-        # t_events = []
-        # yevents = []
 
         while True:
             # recall: y = [x, dxi/ds, z, dzeta/ds, tau]
             y0 = np.array([x0 - x_ref, xi0, z0 - z_ref, zeta0, tau0 - tau_ref]).T
-            # yevents.append(y0)
 
             sol = solve_ivp(
                 lambda s, y, z_ref, x_ref: self._eikonal(s, y, z_ref, x_ref),
@@ -196,7 +198,6 @@ class RayTrace:
 
             event_id, min_t = self._find_event(sol.t_events)
 
-            # t_events.append(min_t)
             t_arr = np.arange(0.0, sol.t[-1] + ds, ds)
             t_arr = t_arr[t_arr < min_t]  # Exclude termination point
             y = sol.sol(t_arr).T
