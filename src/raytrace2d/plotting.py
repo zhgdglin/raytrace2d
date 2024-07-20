@@ -72,7 +72,9 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
 
     ax = axs[1]
     ax = plot_rays(raytrace.rays, ax=ax, **RAY_KW)
-    ax = plot_bathymetry(raytrace.bathymetry.distance, raytrace.bathymetry.water_depth, ax=ax)
+    ax = plot_bathymetry(
+        raytrace.bathymetry.distance, raytrace.bathymetry.water_depth, ax=ax
+    )
     ax.set_xlim(0, max(raytrace.bathymetry.distance))
     ax.set_ylim(0, max_depth)
     ax.invert_yaxis()

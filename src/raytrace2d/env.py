@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 from dataclasses import dataclass, field
@@ -198,12 +197,12 @@ class SoundSpeedProfile:
 
 
 @dataclass
-class Source:
-    depth: float  # Depth [m]
-    distance: float = 0.0  # Range [m]
-
-
-@dataclass
 class Receiver:
     depth: float  # Depth [m]
     distance: float  # Range [m]
+
+
+@dataclass
+class Source:
+    depth: float  # Depth [m]
+    distance: float = 0.0  # Range [m]
