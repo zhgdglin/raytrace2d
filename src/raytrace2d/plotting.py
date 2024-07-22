@@ -94,6 +94,16 @@ def plot_rays(
     return ax
 
 
+def plot_eigenrays(
+        eigenrays: list[Ray], ax: Optional[plt.Axes] = None, *args, **kwargs
+) -> plt.Axes:
+    if ax is None:
+        ax = plt.gca()
+    for ray in eigenrays:
+        ax = ray.plot(ax=ax, *args, **kwargs)
+    return ax
+
+
 def plot_ssp(
     speed: np.ndarray, depth: np.ndarray, ax: Optional[plt.Axes] = None, *args, **kwargs
 ) -> plt.Axes:
