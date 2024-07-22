@@ -2,11 +2,14 @@
 
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from enum import Enum
+import logging
 from typing import Iterable, Optional, Protocol, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.optimize import bisect, brentq
 
 import raytrace2d.env as env
 import raytrace2d.events as events
@@ -15,6 +18,16 @@ import raytrace2d.plotting as rplt
 
 DEG2RAD = np.pi / 180.0
 RAD2DEG = 180.0 / np.pi
+
+
+class PathPhase(Enum):
+    D = "d"
+    B = "b"
+    S = "s"
+    BS = "bs"
+    SB = "sb"
+    BB = "bb"
+    SS = "ss"
 
 
 @dataclass
@@ -29,6 +42,7 @@ class Reflection:
     slowness: float
     angle_i: float
     angle_r: float
+    interface: str
 
 
 @dataclass
@@ -41,10 +55,29 @@ class Ray:
     slw: np.ndarray
     dslwdx: np.ndarray
     dslwdz: np.ndarray
+    launch_angle: float
     reflections: Optional[list[Reflection]] = None
 
     def plot(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
         return rplt.plot_ray(self.x, self.z, ax=ax, *args, **kwargs)
+
+    @property
+    def num_reflections(self) -> int:
+        return len(self.reflections) if self.reflections is not None else 0
+
+    @property
+    def path_phase(self) -> str:
+        if self.num_reflections == 0:
+            return PathPhase.D.value
+        phase_path = ""
+        for reflection in self.reflections:
+            phase_path += reflection.interface
+        return phase_path
+
+
+@dataclass(kw_only=True)
+class Eigenray(Ray):
+    depth_error: float
 
 
 class RayTrace:
@@ -62,6 +95,7 @@ class RayTrace:
         self.receiver: env.Receiver = receiver
         self.reflections: list[Union[None, Reflection]] = []
         self.rays: list[Ray] = []
+        self.eigenrays: list[Eigenray] = []
 
     def _eikonal(self, s, y, z_ref, x_ref):
         # recall: y = [x, dxi/ds, z, dzeta/ds, tau]
@@ -72,9 +106,146 @@ class RayTrace:
         dslwdz, dslwdx = self.profile.slowness_gradient(tmp_z, tmp_x)
         return np.array([y[1] / slw, dslwdx, y[3] / slw, dslwdz, slw])
 
-    def find_eigenrays(self):
-        # TODO: Implement this method
-        raise NotImplementedError("Method not implemented.")
+    @staticmethod
+    def _filter_rays(rays: list[Ray], path: str) -> list[Ray]:
+        return [ray for ray in rays if ray.path_phase == path]
+
+    @staticmethod
+    def _get_intersection(
+        rays: list[Ray], source_depth: float, source_range: float
+    ) -> tuple[int, int]:
+        zind = np.empty((len(rays),), dtype=int)
+        ray_depth = np.empty((len(rays),), dtype=float)
+        for i, ray in enumerate(rays):
+            ind = np.argmin(np.abs(ray.x - source_range))
+            zind[i] = ind
+            ray_depth[i] = ray.z[ind]
+            logging.info(ray_depth[i])
+
+        new_ind = np.argsort(ray_depth)
+        zind = zind[new_ind]
+        ray_depth = ray_depth[new_ind]
+        return find_indices(ray_depth - source_depth)
+
+    def find_eigenrays(self) -> list[Eigenray]:
+        source_depth = self.receiver.depth
+        source_range = self.receiver.distance
+
+        eigenrays = []
+        for ptype in PathPhase:
+            rays = self._filter_rays(self.rays, ptype.value)
+            if len(rays) == 0:
+                continue
+            num_rays = 10
+            launch_angle = rays[0].launch_angle
+            lower_angle_limit = -10.0
+            upper_angle_limit = 10.0
+            failure = False
+            attempt = 0
+            while len(rays) <= 1 and not failure:
+                logging.info(f"{ptype.value}: Need to shoot more rays...")
+                new_angles = np.linspace(
+                    max(launch_angle + lower_angle_limit, -80.0),
+                    min(launch_angle + upper_angle_limit, 80.0),
+                    num_rays,
+                )
+                logging.info(new_angles)
+                rays = self._filter_rays(self.ray_trace(new_angles), ptype.value)
+                num_rays *= 2
+                lower_angle_limit *= 1.5
+                upper_angle_limit *= 1.5
+
+                attempt += 1
+                if attempt > 2:
+                    failure = True
+
+            if failure:
+                logging.info(f"Eigenray not found for path type `{ptype}`.")
+                continue
+
+            # rays = new_rays
+            last_negative_index, first_positive_index = self._get_intersection(
+                rays, source_depth, source_range
+            )
+
+            new_angles = np.array([0, 0])
+            logging.info(first_positive_index, last_negative_index)
+            while last_negative_index is None:
+                angle_lim = rays[first_positive_index].launch_angle
+                if angle_lim <= -80.0:
+                    break
+                logging.info(f"All rays are below the receiver. Angle = {angle_lim}")
+                new_angles = np.linspace(
+                    max(angle_lim - 10.0, -80.0),
+                    angle_lim,
+                    21,
+                )
+                rays = self._filter_rays(self.ray_trace(new_angles), ptype.value)
+                last_negative_index, first_positive_index = self._get_intersection(
+                    rays, source_depth, source_range
+                )
+                logging.info("New angles: ", new_angles.min(), new_angles.max())
+
+            while first_positive_index is None:
+                angle_lim = rays[last_negative_index].launch_angle
+                if angle_lim >= 80.0:
+                    break
+                logging.info(f"All rays are above the receiver. Angle = {angle_lim}")
+                new_angles = np.linspace(
+                    angle_lim,
+                    min(angle_lim + 10.0, 80.0),
+                    21,
+                )
+                rays = self._filter_rays(self.ray_trace(new_angles), ptype.value)
+                last_negative_index, first_positive_index = self._get_intersection(
+                    rays, source_depth, source_range
+                )
+                logging.info("New angles: ", new_angles.min(), new_angles.max())
+
+            if last_negative_index is None or first_positive_index is None:
+                logging.info(f"Eigenray not found for path type `{ptype}`.")
+                continue
+
+            lower_angle = rays[last_negative_index].launch_angle
+            upper_angle = rays[first_positive_index].launch_angle
+            er_launch = self._find_roots((lower_angle, upper_angle))
+            ray = self.trace_ray(er_launch)
+            depth_diff = self._depth_difference(ray, self.receiver)
+            print(f"Eigenray found: {er_launch}")
+            eigenrays.append(
+                Eigenray(
+                    x=ray.x,
+                    z=ray.z,
+                    s=ray.s,
+                    tau=ray.tau,
+                    tang=ray.tang,
+                    slw=ray.slw,
+                    dslwdx=ray.dslwdx,
+                    dslwdz=ray.dslwdz,
+                    launch_angle=er_launch,
+                    reflections=ray.reflections,
+                    depth_error=depth_diff,
+                    # angle_i=np.arctan2(
+                    #     ray.z[-1] - source_depth, ray.x[-1] - source_range
+                    # ),
+                )
+            )
+
+    @staticmethod
+    def _depth_difference(ray: Ray, source: env.Receiver) -> float:
+        ind = np.argmin(np.abs(ray.x - source.distance))
+        return ray.z[ind] - source.depth
+
+    def _find_roots(
+        self,
+        angle_bounds: tuple[float],
+    ) -> float:
+        def f(angle: float) -> float:
+            logging.info(f"Trying angle {angle}...")
+            ray = self.trace_ray(angle)
+            return self._depth_difference(ray, self.receiver)
+
+        return bisect(f, *angle_bounds, xtol=10.0)
 
     @staticmethod
     def _find_event(t_events: list[Union[None, np.ndarray]]) -> tuple[int, float]:
@@ -87,7 +258,7 @@ class RayTrace:
 
     @staticmethod
     def _get_reflection(
-        z_ref, x_ref, s_ref, min_t, event_y, normal_vec: np.ndarray
+        z_ref, x_ref, s_ref, min_t, event_y, normal_vec: np.ndarray, interface: str
     ) -> Reflection:
         return Reflection(
             depth=float(event_y[2] + z_ref),
@@ -95,6 +266,7 @@ class RayTrace:
             slowness=float(min_t + s_ref),
             angle_i=float(np.arctan2(event_y[3], event_y[1])),
             angle_r=float(np.arctan2(normal_vec[1], normal_vec[0])),
+            interface=interface,
         )
 
     def _initialize_events(self, tau_ref: float = 0.0) -> list[events.Event]:
@@ -130,18 +302,15 @@ class RayTrace:
     def _reflect(ei: np.ndarray, normal: np.ndarray) -> np.ndarray:
         return ei - 2 * np.dot(ei, normal) * normal
 
-    def run(
+    def ray_trace(
         self,
         angles: Union[float, Iterable[float]],
         ds: float = 10.0,
         max_bottom_bounce: int = 9999,
         num_workers: int = 16,
-    ) -> list[Ray]:
-        if type(angles) is float:
-            angles = [angles]
-
+    ):
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            self.rays = list(
+            return list(
                 executor.map(
                     self.trace_ray,
                     angles,
@@ -149,7 +318,25 @@ class RayTrace:
                     [max_bottom_bounce] * len(angles),
                 )
             )
-        return self.rays
+
+    def run(
+        self,
+        angles: Union[float, Iterable[float]] = np.linspace(-80, 80, 41),
+        ds: float = 10.0,
+        max_bottom_bounce: int = 9999,
+        num_workers: int = 16,
+        eigenrays: bool = False,
+    ) -> tuple[list[Ray], Optional[list[Eigenray]]]:
+        if type(angles) is float:
+            angles = [angles]
+
+        self.rays = self.ray_trace(angles, ds, max_bottom_bounce, num_workers)
+        if eigenrays and self.receiver is None:
+            raise ValueError("Receiver must be defined to find eigenrays.")
+        if eigenrays:
+            self.eigenrays = self.find_eigenrays()
+            return self.rays, self.eigenrays
+        return self.rays, None
 
     def trace_ray(
         self,
@@ -161,10 +348,7 @@ class RayTrace:
     ) -> Ray:
 
         xi0, zeta0 = self._initialize_launch_vector(angle)
-
         z_ref, x_ref, tau_ref, s_ref = self._initialize_references()
-        # Initialize events
-
         ivp_events = self._initialize_events(tau_ref)
 
         z0 = z_ref
@@ -213,7 +397,9 @@ class RayTrace:
             if event_id == events.Events.SURFACE_REFLECTION.value:
                 normal = env.SeaSurface().NORMAL
                 self.reflections.append(
-                    self._get_reflection(z_ref, x_ref, s_ref, min_t, event_y, normal)
+                    self._get_reflection(
+                        z_ref, x_ref, s_ref, min_t, event_y, normal, PathPhase.S.value
+                    )
                 )
             if event_id == events.Events.BOTTOM_REFLECTION.value:
                 num_btm_bnc += 1
@@ -226,6 +412,7 @@ class RayTrace:
                         min_t,
                         event_y,
                         normal,
+                        PathPhase.B.value,
                     )
                 )
                 if num_btm_bnc >= max_bottom_bounce:
@@ -275,5 +462,61 @@ class RayTrace:
             dslwdz=np.array(
                 [self.profile.slowness_gradient(ze, xe)[0] for ze, xe in zip(z, x)]
             ),
+            launch_angle=angle,
             reflections=self.reflections,
         )
+
+
+def closest_trajectories(x, y, xvec_list, yvec_list):
+    distances = []
+    for xvec, yvec in zip(xvec_list, yvec_list):
+        trajectory_distances = []
+        for i in range(len(xvec) - 1):
+            dist = distance_point_to_segment(
+                x, y, xvec[i], yvec[i], xvec[i + 1], yvec[i + 1]
+            )
+            trajectory_distances.append(dist)
+        min_distance = min(trajectory_distances)
+        distances.append(min_distance)
+
+    # Get indices of the two smallest distances
+    closest_indices = np.argsort(distances)[:2]
+
+    return closest_indices, distances
+
+
+def distance_point_to_segment(px, py, x1, y1, x2, y2):
+    """Calculate the perpendicular distance from point (px, py) to line segment (x1, y1) - (x2, y2)."""
+    # Line segment vector
+    seg_x, seg_y = x2 - x1, y2 - y1
+    # Point vector
+    pt_x, pt_y = px - x1, py - y1
+    # Projection factor
+    seg_length_sq = seg_x**2 + seg_y**2
+    if seg_length_sq == 0:
+        return np.sqrt(pt_x**2 + pt_y**2)  # Segment is a single point
+    t = max(0, min(1, (pt_x * seg_x + pt_y * seg_y) / seg_length_sq))
+    proj_x = x1 + t * seg_x
+    proj_y = y1 + t * seg_y
+    return np.sqrt((px - proj_x) ** 2 + (py - proj_y) ** 2)
+
+
+def find_indices(array: np.ndarray) -> tuple[Optional[int], Optional[int]]:
+    # Ensure the array is a NumPy array
+    array = np.array(array)
+
+    # Find the index of the first positive number
+    first_positive_index = np.searchsorted(array, 0, side="right")
+
+    # Find the index of the last negative number
+    last_negative_index = first_positive_index - 1
+
+    # If the array has no negative numbers, handle the edge case
+    if last_negative_index < 0 or array[last_negative_index] >= 0:
+        last_negative_index = None
+
+    # If the array has no positive numbers, handle the edge case
+    if first_positive_index >= len(array) or array[first_positive_index] <= 0:
+        first_positive_index = None
+
+    return last_negative_index, first_positive_index
