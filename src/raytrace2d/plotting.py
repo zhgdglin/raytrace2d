@@ -55,9 +55,11 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
     }
     SRC_KW = {
         "c": "tab:red",
+        "marker": "*",
     }
     RX_KW = {
         "c": "tab:red",
+        "marker": "o",
     }
     BATHY_KW = {
         "c": "k",
