@@ -27,26 +27,16 @@ def plot_bathymetry(
     return ax
 
 
-def plot_eigenrays(
-    eigenrays: list[Ray], ax: Optional[plt.Axes] = None, *args, **kwargs
-) -> plt.Axes:
-    if ax is None:
-        ax = plt.gca()
-    for ray in eigenrays:
-        ax = ray.plot(ax=ax, *args, **kwargs)
-    return ax
-
-
 def plot_ray(
-    distance: np.ndarray,
-    depth: np.ndarray,
+    dep_var: np.ndarray,
+    ind_var: np.ndarray,
     ax: Optional[plt.Axes] = None,
     *args,
     **kwargs
 ) -> plt.Axes:
     if ax is None:
         ax = plt.gca()
-    ax.plot(distance, depth, *args, **kwargs)
+    ax.plot(dep_var, ind_var, *args, **kwargs)
     return ax
 
 
@@ -81,7 +71,7 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
     ax = axs[1]
     ax = plot_rays(raytrace.rays, ax=ax, **RAY_KW, zorder=1)
     if raytrace.eigenrays:
-        ax = plot_eigenrays(raytrace.eigenrays, c="r", ax=ax, zorder=2)
+        ax = plot_rays(raytrace.eigenrays, c="r", ax=ax, zorder=2)
         ax.plot(raytrace.source.distance, raytrace.source.depth, "r*")
         ax.plot(raytrace.receiver.distance, raytrace.receiver.depth, "ro")
 
@@ -115,7 +105,9 @@ def plot_slowness(
     dsdx: np.ndarray,
 ) -> plt.Figure:
 
-    fig, axs = plt.subplots(figsize=(8, 6), nrows=1, ncols=4, gridspec_kw={"wspace": 0.2})
+    fig, axs = plt.subplots(
+        figsize=(8, 6), nrows=1, ncols=4, gridspec_kw={"wspace": 0.2}
+    )
 
     ax = axs[0]
     ax.plot(speed, depth)
