@@ -291,6 +291,21 @@ class SoundSpeedProfile:
             Matplotlib axes object.
         """
         return rplt.plot_ssp(self.speed, self.depth, ax=ax, *args, **kwargs)
+    
+    def plot_slowness(self) -> plt.Figure:
+        """Plot the slowness profile.
+
+        Returns:
+            Matplotlib figure.
+        """
+        # TODO: Handle multiple distances.
+        return rplt.plot_slowness(
+            depth=self.depth,
+            speed=self.speed,
+            slowness=self.slowness,
+            dsdz=self.dsdz,
+            dsdx=self.dsdx,
+        )
 
     def _set_interpolator(self) -> None:
         """Set the interpolator for the slowness profile."""
@@ -360,4 +375,4 @@ class Source:
     """
 
     depth: float
-    distance: float
+    distance: float = 0.0

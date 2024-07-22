@@ -107,6 +107,47 @@ def plot_rays(
     return ax
 
 
+def plot_slowness(
+    depth: np.ndarray,
+    speed: np.ndarray,
+    slowness: np.ndarray,
+    dsdz: np.ndarray,
+    dsdx: np.ndarray,
+) -> plt.Figure:
+
+    fig, axs = plt.subplots(figsize=(8, 6), nrows=1, ncols=4, gridspec_kw={"wspace": 0.2})
+
+    ax = axs[0]
+    ax.plot(speed, depth)
+    ax.set_ylim(0, depth.max())
+    ax.invert_yaxis()
+    ax.set_ylabel("Depth [m]")
+    ax.set_title("Sound Speed [m/s]")
+
+    ax = axs[1]
+    ax.plot(slowness, depth)
+    ax.set_ylim(0, depth.max())
+    ax.set_yticklabels([])
+    ax.invert_yaxis()
+    ax.set_title("Slowness [s/m]")
+
+    ax = axs[2]
+    ax.plot(dsdz, depth)
+    ax.set_ylim(0, depth.max())
+    ax.set_yticklabels([])
+    ax.invert_yaxis()
+    ax.set_title("$ds/dz$ [s/m^2]")
+
+    ax = axs[3]
+    ax.plot(dsdx, depth)
+    ax.set_ylim(0, depth.max())
+    ax.set_yticklabels([])
+    ax.invert_yaxis()
+    ax.set_title("$ds/dx$ [s/m^2]")
+
+    return fig
+
+
 def plot_ssp(
     speed: np.ndarray, depth: np.ndarray, ax: Optional[plt.Axes] = None, *args, **kwargs
 ) -> plt.Axes:
