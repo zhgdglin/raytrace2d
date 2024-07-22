@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+"""Module provides classes for events that terminate the ray trace."""
+
 from abc import ABC, abstractmethod
 from enum import Enum
 from functools import partial, update_wrapper
@@ -10,6 +12,8 @@ import raytrace2d.env as env
 
 
 class Events(Enum):
+    """Enumeration of events that terminate the ray trace."""
+
     SURFACE_REFLECTION = 0
     BOTTOM_REFLECTION = 1
     MAX_BOUNDS_REACHED = 2
@@ -30,6 +34,19 @@ class Event(ABC):
 
 
 class BottomReflection(Event):
+    """Event that terminates the ray trace when the ray reaches the bottom
+    of the ocean. The event is triggered when the ray depth exceeds the bottom
+    depth.
+
+
+    Attributes:
+        terminal: bool - True if the event is terminal, False otherwise.
+        direction: int - The direction of the event. If negative, the event
+            is triggered when the function is decreasing. If positive, the
+            event is triggered when the function is increasing. If zero, the
+            event is triggered at a local minimum or maximum.
+    """
+
     def __init__(self) -> None:
         self.terminal = True
         self.direction = -1
@@ -47,6 +64,18 @@ class BottomReflection(Event):
 
 
 class MaxBoundsReached(Event):
+    """Event that terminates the ray trace when the ray reaches the maximum
+    bounds of the domain.
+
+    Attributes:
+        Attributes:
+        terminal: bool - True if the event is terminal, False otherwise.
+        direction: int - The direction of the event. If negative, the event
+            is triggered when the function is decreasing. If positive, the
+            event is triggered when the function is increasing. If zero, the
+            event is triggered at a local minimum or maximum.
+    """
+
     def __init__(self) -> None:
         self.terminal = True
         self.direction = -1
@@ -67,6 +96,17 @@ class MaxBoundsReached(Event):
 
 
 class MaxTimeReached(Event):
+    """Event that terminates the ray trace when the ray reaches the maximum
+    time.
+
+    Attributes:
+        terminal: bool - True if the event is terminal, False otherwise.
+        direction: int - The direction of the event. If negative, the event
+            is triggered when the function is decreasing. If positive, the
+            event is triggered when the function is increasing. If zero, the
+            event is triggered at a local minimum or maximum.
+    """
+
     def __init__(self) -> None:
         self.terminal = True
         self.direction = -1
@@ -82,6 +122,17 @@ class MaxTimeReached(Event):
 
 
 class SurfaceReflection(Event):
+    """Event that terminates the ray trace when the ray reaches the sea
+    surface. The event is triggered when sea level exceeds ray depth.
+
+    Attributes:
+        terminal: bool - True if the event is terminal, False otherwise.
+        direction: int - The direction of the event. If negative, the event
+            is triggered when the function is decreasing. If positive, the
+            event is triggered when the function is increasing. If zero, the
+            event is triggered at a local minimum or maximum.
+    """
+
     def __init__(self) -> None:
         self.terminal = True
         self.direction = -1
@@ -95,6 +146,16 @@ class SurfaceReflection(Event):
 
 
 class ZeroDepthReached(Event):
+    """Event that terminates the ray trace when the ray reaches zero depth.
+
+    Attributes:
+        terminal: bool - True if the event is terminal, False otherwise.
+        direction: int - The direction of the event. If negative, the event
+            is triggered when the function is decreasing. If positive, the
+            event is triggered when the function is increasing. If zero, the
+            event is triggered at a local minimum or maximum.
+    """
+
     def __init__(self) -> None:
         self.terminal = True
         self.direction = -1
@@ -110,7 +171,22 @@ class ZeroDepthReached(Event):
 
 
 class PartialWithAttributes(partial):
-    def __new__(cls, func, *args, **kwargs):
+    """Partial function with attributes. The class is a subclass of the
+    `partial` class and is used to create a partial function with attributes
+    that can be accessed by the user.
+    """
+
+    def __new__(cls: object, func: callable, *args, **kwargs):
+        """Create a new instance of the class.
+
+        Args:
+            func: The function to be partially evaluated.
+            *args: The arguments to be passed to the function.
+            **kwargs: The keyword arguments to be passed to the function.
+
+        Returns:
+            obj: The new instance of the class.
+        """
         obj = super().__new__(cls, func, *args, **kwargs)
         update_wrapper(obj, func)
         obj.__dict__.update(func.__dict__)
