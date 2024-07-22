@@ -97,6 +97,11 @@ class RayTrace:
         self.rays: list[Ray] = []
         self.eigenrays: list[Eigenray] = []
 
+    @staticmethod
+    def _depth_difference(ray: Ray, receiver: env.Receiver) -> float:
+        ind = np.argmin(np.abs(ray.x - receiver.distance))
+        return ray.z[ind] - receiver.depth
+
     def _eikonal(self, s, y, z_ref, x_ref):
         # recall: y = [x, dxi/ds, z, dzeta/ds, tau]
         y = np.array(y).squeeze()
@@ -110,47 +115,7 @@ class RayTrace:
     def _filter_rays(rays: list[Ray], path: str) -> list[Ray]:
         return [ray for ray in rays if ray.path_phase == path]
 
-    def _get_intersection(
-        self, rays: list[Ray], receiver: env.Receiver
-    ) -> tuple[int, int]:
-        zind = np.empty((len(rays),), dtype=int)
-        ray_depth = np.empty((len(rays),), dtype=float)
-        for i, ray in enumerate(rays):
-            ind = np.argmin(np.abs(ray.x - receiver.distance))
-            zind[i] = ind
-            ray_depth[i] = ray.z[ind]
-            logging.info(ray_depth[i])
-
-        new_ind = np.argsort(ray_depth)
-        zind = zind[new_ind]
-        ray_depth = ray_depth[new_ind]
-        return self._find_indices(ray_depth - receiver.depth)
-
-    @staticmethod
-    def _find_indices(array: np.ndarray) -> tuple[Optional[int], Optional[int]]:
-        # Ensure the array is a NumPy array
-        array = np.array(array)
-
-        # Find the index of the first positive number
-        first_positive_index = np.searchsorted(array, 0, side="right")
-
-        # Find the index of the last negative number
-        last_negative_index = first_positive_index - 1
-
-        # If the array has no negative numbers, handle the edge case
-        if last_negative_index < 0 or array[last_negative_index] >= 0:
-            last_negative_index = None
-
-        # If the array has no positive numbers, handle the edge case
-        if first_positive_index >= len(array) or array[first_positive_index] <= 0:
-            first_positive_index = None
-
-        return last_negative_index, first_positive_index
-
     def find_eigenrays(self) -> list[Eigenray]:
-        source_depth = self.receiver.depth
-        source_range = self.receiver.distance
-
         eigenrays = []
         for ptype in PathPhase:
             rays = self._filter_rays(self.rays, ptype.value)
@@ -251,9 +216,34 @@ class RayTrace:
         return eigenrays
 
     @staticmethod
-    def _depth_difference(ray: Ray, receiver: env.Receiver) -> float:
-        ind = np.argmin(np.abs(ray.x - receiver.distance))
-        return ray.z[ind] - receiver.depth
+    def _find_event(t_events: list[Union[None, np.ndarray]]) -> tuple[int, float]:
+        min_t = 0.0
+        for aid, t_event in enumerate(t_events):
+            if len(t_event) > 0 and t_event[0] > min_t:
+                event_id = aid
+                min_t = t_event[0]
+        return event_id, min_t
+
+    @staticmethod
+    def _find_indices(array: np.ndarray) -> tuple[Optional[int], Optional[int]]:
+        # Ensure the array is a NumPy array
+        array = np.array(array)
+
+        # Find the index of the first positive number
+        first_positive_index = np.searchsorted(array, 0, side="right")
+
+        # Find the index of the last negative number
+        last_negative_index = first_positive_index - 1
+
+        # If the array has no negative numbers, handle the edge case
+        if last_negative_index < 0 or array[last_negative_index] >= 0:
+            last_negative_index = None
+
+        # If the array has no positive numbers, handle the edge case
+        if first_positive_index >= len(array) or array[first_positive_index] <= 0:
+            first_positive_index = None
+
+        return last_negative_index, first_positive_index
 
     def _find_roots(
         self,
@@ -266,14 +256,21 @@ class RayTrace:
 
         return brentq(f, *angle_bounds)
 
-    @staticmethod
-    def _find_event(t_events: list[Union[None, np.ndarray]]) -> tuple[int, float]:
-        min_t = 0.0
-        for aid, t_event in enumerate(t_events):
-            if len(t_event) > 0 and t_event[0] > min_t:
-                event_id = aid
-                min_t = t_event[0]
-        return event_id, min_t
+    def _get_intersection(
+        self, rays: list[Ray], receiver: env.Receiver
+    ) -> tuple[int, int]:
+        zind = np.empty((len(rays),), dtype=int)
+        ray_depth = np.empty((len(rays),), dtype=float)
+        for i, ray in enumerate(rays):
+            ind = np.argmin(np.abs(ray.x - receiver.distance))
+            zind[i] = ind
+            ray_depth[i] = ray.z[ind]
+            logging.info(ray_depth[i])
+
+        new_ind = np.argsort(ray_depth)
+        zind = zind[new_ind]
+        ray_depth = ray_depth[new_ind]
+        return self._find_indices(ray_depth - receiver.depth)
 
     @staticmethod
     def _get_reflection(
@@ -314,17 +311,13 @@ class RayTrace:
     def plot(self) -> plt.Axes:
         return rplt.plot_ray_trace(self)
 
-    def plot_rays(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
-        return rplt.plot_rays(self.rays, ax=ax, *args, **kwargs)
-
     def plot_eigenrays(
         self, ax: Optional[plt.Axes] = None, *args, **kwargs
     ) -> plt.Axes:
         return rplt.plot_eigenrays(self.eigenrays, ax=ax, *args, **kwargs)
 
-    @staticmethod
-    def _reflect(ei: np.ndarray, normal: np.ndarray) -> np.ndarray:
-        return ei - 2 * np.dot(ei, normal) * normal
+    def plot_rays(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
+        return rplt.plot_rays(self.rays, ax=ax, *args, **kwargs)
 
     def ray_trace(
         self,
@@ -342,6 +335,10 @@ class RayTrace:
                     [max_bottom_bounce] * len(angles),
                 )
             )
+
+    @staticmethod
+    def _reflect(ei: np.ndarray, normal: np.ndarray) -> np.ndarray:
+        return ei - 2 * np.dot(ei, normal) * normal
 
     def run(
         self,
