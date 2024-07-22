@@ -27,6 +27,16 @@ def plot_bathymetry(
     return ax
 
 
+def plot_eigenrays(
+    eigenrays: list[Ray], ax: Optional[plt.Axes] = None, *args, **kwargs
+) -> plt.Axes:
+    if ax is None:
+        ax = plt.gca()
+    for ray in eigenrays:
+        ax = ray.plot(ax=ax, *args, **kwargs)
+    return ax
+
+
 def plot_ray(
     distance: np.ndarray,
     depth: np.ndarray,
@@ -41,7 +51,6 @@ def plot_ray(
 
 
 def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
-
     FIG_KW = {
         "figsize": (12, 4),
         "nrows": 1,
@@ -63,7 +72,6 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
 
     ax = axs[0]
     ax = plot_ssp(1 / raytrace.profile(zvec), zvec, ax=ax, **SSP_KW)
-    # ax = raytrace.profile.plot(ax=ax)
     ax.set_ylim(0, max_depth)
     ax.invert_yaxis()
     ax.set_xlabel("Speed [m/s]")
@@ -71,11 +79,16 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
     ax.tick_params(top=True, labeltop=True, bottom=False, labelbottom=False)
 
     ax = axs[1]
-    ax = plot_rays(raytrace.rays, ax=ax, **RAY_KW)
+    ax = plot_rays(raytrace.rays, ax=ax, **RAY_KW, zorder=1)
+    if raytrace.eigenrays:
+        ax = plot_eigenrays(raytrace.eigenrays, c="r", ax=ax, zorder=2)
+        ax.plot(raytrace.source.distance, raytrace.source.depth, "r*")
+        ax.plot(raytrace.receiver.distance, raytrace.receiver.depth, "ro")
+
     ax = plot_bathymetry(
         raytrace.bathymetry.distance, raytrace.bathymetry.water_depth, ax=ax
     )
-    ax.set_xlim(0, max(raytrace.bathymetry.distance))
+    ax.set_xlim(-10, max(raytrace.bathymetry.distance) + 10)
     ax.set_ylim(0, max_depth)
     ax.invert_yaxis()
     ax.set_yticklabels([])
@@ -90,16 +103,6 @@ def plot_rays(
     if ax is None:
         ax = plt.gca()
     for ray in rays:
-        ax = ray.plot(ax=ax, *args, **kwargs)
-    return ax
-
-
-def plot_eigenrays(
-        eigenrays: list[Ray], ax: Optional[plt.Axes] = None, *args, **kwargs
-) -> plt.Axes:
-    if ax is None:
-        ax = plt.gca()
-    for ray in eigenrays:
         ax = ray.plot(ax=ax, *args, **kwargs)
     return ax
 
