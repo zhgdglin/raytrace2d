@@ -40,8 +40,8 @@ class BottomReflection(Event):
 
 
     Attributes:
-        terminal: bool - True if the event is terminal, False otherwise.
-        direction: int - The direction of the event. If negative, the event
+        terminal: True if the event is terminal, False otherwise.
+        direction: The direction of the event. If negative, the event
             is triggered when the function is decreasing. If positive, the
             event is triggered when the function is increasing. If zero, the
             event is triggered at a local minimum or maximum.
@@ -69,7 +69,7 @@ class BottomReflection(Event):
             bathymetry: Bathymetry object.
 
         Returns:
-            float: The difference between the ray depth and the bottom depth.
+            The difference between the ray depth and the bottom depth.
         """
         return bathymetry(y[0] + x_ref) - (y[2] + z_ref)
 
@@ -80,8 +80,8 @@ class MaxBoundsReached(Event):
 
     Attributes:
         Attributes:
-        terminal: bool - True if the event is terminal, False otherwise.
-        direction: int - The direction of the event. If negative, the event
+        terminal: True if the event is terminal, False otherwise.
+        direction: The direction of the event. If negative, the event
             is triggered when the function is decreasing. If positive, the
             event is triggered when the function is increasing. If zero, the
             event is triggered at a local minimum or maximum.
@@ -106,7 +106,7 @@ class MaxBoundsReached(Event):
             bathymetry: Bathymetry object.
 
         Returns:
-            float: The minimum distance between the ray and the domain bounds.
+            The minimum distance between the ray and the domain bounds.
         """
         return np.min(
             [
@@ -121,8 +121,8 @@ class MaxTimeReached(Event):
     time.
 
     Attributes:
-        terminal: bool - True if the event is terminal, False otherwise.
-        direction: int - The direction of the event. If negative, the event
+        terminal: True if the event is terminal, False otherwise.
+        direction: The direction of the event. If negative, the event
             is triggered when the function is decreasing. If positive, the
             event is triggered when the function is increasing. If zero, the
             event is triggered at a local minimum or maximum.
@@ -147,7 +147,7 @@ class MaxTimeReached(Event):
             t_max: Maximum time.
 
         Returns:
-            float: The difference between the ray time and the maximum time.
+            The difference between the ray time and the maximum time.
         """
         return t_max - (y[4] + tau_ref)
 
@@ -157,8 +157,8 @@ class SurfaceReflection(Event):
     surface. The event is triggered when sea level exceeds ray depth.
 
     Attributes:
-        terminal: bool - True if the event is terminal, False otherwise.
-        direction: int - The direction of the event. If negative, the event
+        terminal: True if the event is terminal, False otherwise.
+        direction: The direction of the event. If negative, the event
             is triggered when the function is decreasing. If positive, the
             event is triggered when the function is increasing. If zero, the
             event is triggered at a local minimum or maximum.
@@ -180,7 +180,7 @@ class SurfaceReflection(Event):
             z_ref: Depth reference.
 
         Returns:
-            float: The difference between the ray depth and the sea level.
+            The difference between the ray depth and the sea level.
         """
         return y[2] + z_ref - env.SeaSurface.LEVEL
 
@@ -189,8 +189,8 @@ class ZeroDepthReached(Event):
     """Event that terminates the ray trace when the ray reaches zero depth.
 
     Attributes:
-        terminal: bool - True if the event is terminal, False otherwise.
-        direction: int - The direction of the event. If negative, the event
+        terminal: True if the event is terminal, False otherwise.
+        direction: The direction of the event. If negative, the event
             is triggered when the function is decreasing. If positive, the
             event is triggered when the function is increasing. If zero, the
             event is triggered at a local minimum or maximum.
@@ -215,7 +215,7 @@ class ZeroDepthReached(Event):
             bathymetry: Bathymetry object.
 
         Returns:
-            float: The difference between the ray depth and zero depth.
+            The difference between the ray depth and zero depth.
         """
         return bathymetry(y[0] + x_ref)
 
@@ -235,7 +235,7 @@ class PartialWithAttributes(partial):
             **kwargs: The keyword arguments to be passed to the function.
 
         Returns:
-            obj: The new instance of the class.
+            The new instance of the class.
         """
         obj = super().__new__(cls, func, *args, **kwargs)
         update_wrapper(obj, func)
