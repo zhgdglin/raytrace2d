@@ -7,10 +7,10 @@ The code is adapted from Y.T. Lin's MATLAB code and an early Python translation 
 
 To install, clone the repository and install the requirements:
 ```bash
-git clone
+git clone https://github.com/NeptuneProjects/raytrace2d.git
 ```
 
-Alternatively, the package can be installed as a dependency via pip:
+<!-- Alternatively, the package can be installed as a dependency via pip:
 ```bash
-pip install git+
-```
+pip install git+https://github.com/NeptuneProjects/raytrace2d.git
+``` -->
