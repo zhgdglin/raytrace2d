@@ -125,108 +125,144 @@ class RayTrace:
         return np.array([y[1] / slw, dslwdx, y[3] / slw, dslwdz, slw])
 
     @staticmethod
-    def _filter_rays(rays: list[Ray], path: str) -> list[Ray]:
-        return [ray for ray in rays if ray.path_phase == path]
+    def _filter_rays(rays: list[Ray], ptype: str) -> list[Ray]:
+        return [ray for ray in rays if ray.path_phase == ptype]
 
     def find_eigenrays(self) -> list[Eigenray]:
-        eigenrays = []
-        for ptype in PathPhase:
-            rays = self._filter_rays(self.rays, ptype.value)
+        eigenrays = [self._find_eigenrays_by_ptype(ptype.value) for ptype in PathPhase]
+        if all(ray is None for ray in eigenrays):
+            logging.info("Eigenrays not found.")
+            return None
+        return [ray for ray in eigenrays if ray is not None]
+
+    def _find_eigenrays_by_ptype(self, ptype: str) -> None:
+        logging.info("=" * 80 + f"\nSearching for eigenray with path type `{ptype}`...")
+        rays = self._filter_rays(self.rays, ptype)
+        if len(rays) == 0:
+            return
+        num_rays = 10
+        launch_angle = rays[0].launch_angle
+        lower_angle_limit = -10.0
+        upper_angle_limit = 10.0
+        failure = False
+        attempt = 0
+        while len(rays) <= 1 and not failure:
+            logging.info(f"{ptype}: Need to shoot more rays...")
+            new_angles = np.linspace(
+                max(launch_angle + lower_angle_limit, -80.0),
+                min(launch_angle + upper_angle_limit, 80.0),
+                num_rays,
+            )
+            logging.info(f"New angles: {new_angles}")
+            rays = self._filter_rays(self.ray_trace(new_angles), ptype)
+            num_rays *= 2
+            lower_angle_limit *= 1.5
+            upper_angle_limit *= 1.5
+
+            attempt += 1
+            if attempt > 2:
+                failure = True
+
+        if failure:
+            logging.info(f"Eigenray not found for path type `{ptype}`.")
+            return
+
+        # rays = new_rays
+        last_negative_index, first_positive_index = self._get_intersection(
+            rays, self.receiver
+        )
+
+        logging.info(
+            f"First (+) index: {first_positive_index} | Last (-) index: {last_negative_index}"
+        )
+        new_angles = np.array([0, 0])
+        num_rays = 16
+        if last_negative_index is None:
+            angle_lim = rays[first_positive_index].launch_angle
+            logging.info(f"All rays are below the receiver. Angle = {angle_lim}")
+        if first_positive_index is None:
+            angle_lim = rays[last_negative_index].launch_angle
+            logging.info(f"All rays are above the receiver. Angle = {angle_lim}")
+        attempt = 0
+        while last_negative_index is None:
+            if angle_lim <= -80.0:
+                break
+            new_angles = np.linspace(
+                max(angle_lim - 15.0, -80.0),
+                angle_lim,
+                num_rays,
+            )
+            logging.info(f"New angles: {new_angles[0]}, {new_angles[-1]}")
+            rays = self._filter_rays(self.ray_trace(new_angles), ptype)
             if len(rays) == 0:
-                continue
-            num_rays = 10
-            launch_angle = rays[0].launch_angle
-            lower_angle_limit = -10.0
-            upper_angle_limit = 10.0
-            failure = False
-            attempt = 0
-            while len(rays) <= 1 and not failure:
-                logging.info(f"{ptype.value}: Need to shoot more rays...")
-                new_angles = np.linspace(
-                    max(launch_angle + lower_angle_limit, -80.0),
-                    min(launch_angle + upper_angle_limit, 80.0),
-                    num_rays,
-                )
-                logging.info(new_angles)
-                rays = self._filter_rays(self.ray_trace(new_angles), ptype.value)
-                num_rays *= 2
-                lower_angle_limit *= 1.5
-                upper_angle_limit *= 1.5
-
+                logging.info(f"No rays found. Terminating search.")
+                break
+            if len(rays) == 1 and attempt < 2:
+                logging.info(f"{len(rays)} found; incrementing angles.")
+                angle_lim = new_angles[0]
                 attempt += 1
-                if attempt > 2:
-                    failure = True
-
-            if failure:
-                logging.info(f"Eigenray not found for path type `{ptype}`.")
                 continue
-
-            # rays = new_rays
             last_negative_index, first_positive_index = self._get_intersection(
                 rays, self.receiver
             )
-
-            new_angles = np.array([0, 0])
-            logging.info(first_positive_index, last_negative_index)
-            while last_negative_index is None:
-                angle_lim = rays[first_positive_index].launch_angle
-                if angle_lim <= -80.0:
-                    break
-                logging.info(f"All rays are below the receiver. Angle = {angle_lim}")
-                new_angles = np.linspace(
-                    max(angle_lim - 10.0, -80.0),
-                    angle_lim,
-                    21,
-                )
-                rays = self._filter_rays(self.ray_trace(new_angles), ptype.value)
-                last_negative_index, first_positive_index = self._get_intersection(
-                    rays, self.receiver
-                )
-                logging.info("New angles: ", new_angles.min(), new_angles.max())
-
-            while first_positive_index is None:
-                angle_lim = rays[last_negative_index].launch_angle
-                if angle_lim >= 80.0:
-                    break
-                logging.info(f"All rays are above the receiver. Angle = {angle_lim}")
-                new_angles = np.linspace(
-                    angle_lim,
-                    min(angle_lim + 10.0, 80.0),
-                    21,
-                )
-                rays = self._filter_rays(self.ray_trace(new_angles), ptype.value)
-                last_negative_index, first_positive_index = self._get_intersection(
-                    rays, self.receiver
-                )
-                logging.info("New angles: ", new_angles.min(), new_angles.max())
-
-            if last_negative_index is None or first_positive_index is None:
-                logging.info(f"Eigenray not found for path type `{ptype}`.")
-                continue
-
-            lower_angle = rays[last_negative_index].launch_angle
-            upper_angle = rays[first_positive_index].launch_angle
-            er_launch = self._find_roots((lower_angle, upper_angle))
-            ray = self.trace_ray(er_launch)
-            depth_diff = self._depth_difference(ray, self.receiver)
-            print(f"Eigenray found: {er_launch}")
-            eigenrays.append(
-                Eigenray(
-                    x=ray.x,
-                    z=ray.z,
-                    s=ray.s,
-                    tau=ray.tau,
-                    tang=ray.tang,
-                    slw=ray.slw,
-                    dslwdx=ray.dslwdx,
-                    dslwdz=ray.dslwdz,
-                    launch_angle=er_launch,
-                    reflections=ray.reflections,
-                    depth_error=depth_diff,
-                )
+            angle_lim = rays[first_positive_index].launch_angle
+            logging.info(
+                f"First (+) index: {first_positive_index} | Last (-) index: {last_negative_index}"
             )
+            if last_negative_index is None:
+                logging.info(f"All rays are below the receiver. Angle = {angle_lim}")
 
-        return eigenrays
+        while first_positive_index is None:
+            if angle_lim >= 80.0:
+                break
+            new_angles = np.linspace(
+                angle_lim,
+                min(angle_lim + 15.0, 80.0),
+                num_rays,
+            )
+            logging.info(f"New angles: {new_angles[0]}, {new_angles[-1]}")
+            rays = self._filter_rays(self.ray_trace(new_angles), ptype)
+            if len(rays) == 0:
+                logging.info(f"No rays found. Terminating search.")
+                break
+            if len(rays) == 1 and attempt < 2:
+                logging.info(f"{len(rays)} found; incrementing angles.")
+                angle_lim = new_angles[-1]
+                attempt += 1
+                continue
+            last_negative_index, first_positive_index = self._get_intersection(
+                rays, self.receiver
+            )
+            angle_lim = rays[last_negative_index].launch_angle
+            logging.info(
+                f"First (+) index: {first_positive_index} | Last (-) index: {last_negative_index}"
+            )
+            if first_positive_index is None:
+                logging.info(f"All rays are above the receiver. Angle = {angle_lim}")
+
+        if last_negative_index is None or first_positive_index is None:
+            logging.info(f"Eigenray not found for path type `{ptype}`.")
+            return
+
+        lower_angle = rays[last_negative_index].launch_angle
+        upper_angle = rays[first_positive_index].launch_angle
+        er_launch = self._find_roots((lower_angle, upper_angle))
+        ray = self.trace_ray(er_launch)
+        depth_diff = self._depth_difference(ray, self.receiver)
+        print(f"Eigenray found: {er_launch}")
+        return Eigenray(
+            x=ray.x,
+            z=ray.z,
+            s=ray.s,
+            tau=ray.tau,
+            tang=ray.tang,
+            slw=ray.slw,
+            dslwdx=ray.dslwdx,
+            dslwdz=ray.dslwdz,
+            launch_angle=er_launch,
+            reflections=ray.reflections,
+            depth_error=depth_diff,
+        )
 
     @staticmethod
     def _find_event(t_events: list[Union[None, np.ndarray]]) -> tuple[int, float]:
@@ -267,7 +303,7 @@ class RayTrace:
             ray = self.trace_ray(angle)
             return self._depth_difference(ray, self.receiver)
 
-        return brentq(f, *angle_bounds)
+        return brentq(f, *angle_bounds, xtol=0.25)
 
     def _get_intersection(
         self, rays: list[Ray], receiver: env.Receiver
@@ -278,7 +314,7 @@ class RayTrace:
             ind = np.argmin(np.abs(ray.x - receiver.distance))
             zind[i] = ind
             ray_depth[i] = ray.z[ind]
-            logging.info(ray_depth[i])
+            logging.info(f"Ray depth = {ray_depth[i]}")
 
         new_ind = np.argsort(ray_depth)
         zind = zind[new_ind]
