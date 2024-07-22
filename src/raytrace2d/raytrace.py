@@ -9,7 +9,7 @@ from typing import Iterable, Optional, Protocol, Union
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import solve_ivp
-from scipy.optimize import bisect, brentq
+from scipy.optimize import brentq
 
 import raytrace2d.env as env
 import raytrace2d.events as events
@@ -110,14 +110,13 @@ class RayTrace:
     def _filter_rays(rays: list[Ray], path: str) -> list[Ray]:
         return [ray for ray in rays if ray.path_phase == path]
 
-    @staticmethod
     def _get_intersection(
-        rays: list[Ray], source_depth: float, source_range: float
+        self, rays: list[Ray], receiver: env.Receiver
     ) -> tuple[int, int]:
         zind = np.empty((len(rays),), dtype=int)
         ray_depth = np.empty((len(rays),), dtype=float)
         for i, ray in enumerate(rays):
-            ind = np.argmin(np.abs(ray.x - source_range))
+            ind = np.argmin(np.abs(ray.x - receiver.distance))
             zind[i] = ind
             ray_depth[i] = ray.z[ind]
             logging.info(ray_depth[i])
@@ -125,7 +124,28 @@ class RayTrace:
         new_ind = np.argsort(ray_depth)
         zind = zind[new_ind]
         ray_depth = ray_depth[new_ind]
-        return find_indices(ray_depth - source_depth)
+        return self._find_indices(ray_depth - receiver.depth)
+
+    @staticmethod
+    def _find_indices(array: np.ndarray) -> tuple[Optional[int], Optional[int]]:
+        # Ensure the array is a NumPy array
+        array = np.array(array)
+
+        # Find the index of the first positive number
+        first_positive_index = np.searchsorted(array, 0, side="right")
+
+        # Find the index of the last negative number
+        last_negative_index = first_positive_index - 1
+
+        # If the array has no negative numbers, handle the edge case
+        if last_negative_index < 0 or array[last_negative_index] >= 0:
+            last_negative_index = None
+
+        # If the array has no positive numbers, handle the edge case
+        if first_positive_index >= len(array) or array[first_positive_index] <= 0:
+            first_positive_index = None
+
+        return last_negative_index, first_positive_index
 
     def find_eigenrays(self) -> list[Eigenray]:
         source_depth = self.receiver.depth
@@ -165,7 +185,7 @@ class RayTrace:
 
             # rays = new_rays
             last_negative_index, first_positive_index = self._get_intersection(
-                rays, source_depth, source_range
+                rays, self.receiver
             )
 
             new_angles = np.array([0, 0])
@@ -182,7 +202,7 @@ class RayTrace:
                 )
                 rays = self._filter_rays(self.ray_trace(new_angles), ptype.value)
                 last_negative_index, first_positive_index = self._get_intersection(
-                    rays, source_depth, source_range
+                    rays, self.receiver
                 )
                 logging.info("New angles: ", new_angles.min(), new_angles.max())
 
@@ -198,7 +218,7 @@ class RayTrace:
                 )
                 rays = self._filter_rays(self.ray_trace(new_angles), ptype.value)
                 last_negative_index, first_positive_index = self._get_intersection(
-                    rays, source_depth, source_range
+                    rays, self.receiver
                 )
                 logging.info("New angles: ", new_angles.min(), new_angles.max())
 
@@ -225,16 +245,15 @@ class RayTrace:
                     launch_angle=er_launch,
                     reflections=ray.reflections,
                     depth_error=depth_diff,
-                    # angle_i=np.arctan2(
-                    #     ray.z[-1] - source_depth, ray.x[-1] - source_range
-                    # ),
                 )
             )
 
+        return eigenrays
+
     @staticmethod
-    def _depth_difference(ray: Ray, source: env.Receiver) -> float:
-        ind = np.argmin(np.abs(ray.x - source.distance))
-        return ray.z[ind] - source.depth
+    def _depth_difference(ray: Ray, receiver: env.Receiver) -> float:
+        ind = np.argmin(np.abs(ray.x - receiver.distance))
+        return ray.z[ind] - receiver.depth
 
     def _find_roots(
         self,
@@ -245,7 +264,7 @@ class RayTrace:
             ray = self.trace_ray(angle)
             return self._depth_difference(ray, self.receiver)
 
-        return bisect(f, *angle_bounds, xtol=10.0)
+        return brentq(f, *angle_bounds)
 
     @staticmethod
     def _find_event(t_events: list[Union[None, np.ndarray]]) -> tuple[int, float]:
@@ -297,6 +316,11 @@ class RayTrace:
 
     def plot_rays(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
         return rplt.plot_rays(self.rays, ax=ax, *args, **kwargs)
+
+    def plot_eigenrays(
+        self, ax: Optional[plt.Axes] = None, *args, **kwargs
+    ) -> plt.Axes:
+        return rplt.plot_eigenrays(self.eigenrays, ax=ax, *args, **kwargs)
 
     @staticmethod
     def _reflect(ei: np.ndarray, normal: np.ndarray) -> np.ndarray:
@@ -465,58 +489,3 @@ class RayTrace:
             launch_angle=angle,
             reflections=self.reflections,
         )
-
-
-def closest_trajectories(x, y, xvec_list, yvec_list):
-    distances = []
-    for xvec, yvec in zip(xvec_list, yvec_list):
-        trajectory_distances = []
-        for i in range(len(xvec) - 1):
-            dist = distance_point_to_segment(
-                x, y, xvec[i], yvec[i], xvec[i + 1], yvec[i + 1]
-            )
-            trajectory_distances.append(dist)
-        min_distance = min(trajectory_distances)
-        distances.append(min_distance)
-
-    # Get indices of the two smallest distances
-    closest_indices = np.argsort(distances)[:2]
-
-    return closest_indices, distances
-
-
-def distance_point_to_segment(px, py, x1, y1, x2, y2):
-    """Calculate the perpendicular distance from point (px, py) to line segment (x1, y1) - (x2, y2)."""
-    # Line segment vector
-    seg_x, seg_y = x2 - x1, y2 - y1
-    # Point vector
-    pt_x, pt_y = px - x1, py - y1
-    # Projection factor
-    seg_length_sq = seg_x**2 + seg_y**2
-    if seg_length_sq == 0:
-        return np.sqrt(pt_x**2 + pt_y**2)  # Segment is a single point
-    t = max(0, min(1, (pt_x * seg_x + pt_y * seg_y) / seg_length_sq))
-    proj_x = x1 + t * seg_x
-    proj_y = y1 + t * seg_y
-    return np.sqrt((px - proj_x) ** 2 + (py - proj_y) ** 2)
-
-
-def find_indices(array: np.ndarray) -> tuple[Optional[int], Optional[int]]:
-    # Ensure the array is a NumPy array
-    array = np.array(array)
-
-    # Find the index of the first positive number
-    first_positive_index = np.searchsorted(array, 0, side="right")
-
-    # Find the index of the last negative number
-    last_negative_index = first_positive_index - 1
-
-    # If the array has no negative numbers, handle the edge case
-    if last_negative_index < 0 or array[last_negative_index] >= 0:
-        last_negative_index = None
-
-    # If the array has no positive numbers, handle the edge case
-    if first_positive_index >= len(array) or array[first_positive_index] <= 0:
-        first_positive_index = None
-
-    return last_negative_index, first_positive_index
