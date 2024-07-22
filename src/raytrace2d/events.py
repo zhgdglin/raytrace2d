@@ -60,6 +60,17 @@ class BottomReflection(Event):
     def _bottom_reflection(
         y, z_ref: float, x_ref: float, bathymetry: env.Bathymetry
     ) -> float:
+        """Check if the ray has reached the bottom of the ocean.
+
+        Args:
+            y: Terms of the eikonal equation.
+            z_ref: Depth reference.
+            x_ref: Horizontal reference.
+            bathymetry: Bathymetry object.
+
+        Returns:
+            float: The difference between the ray depth and the bottom depth.
+        """
         return bathymetry(y[0] + x_ref) - (y[2] + z_ref)
 
 
@@ -87,6 +98,16 @@ class MaxBoundsReached(Event):
 
     @staticmethod
     def _max_bounds_reached(y, x_ref: float, bathymetry: env.Bathymetry) -> float:
+        """Check if the ray has reached the maximum bounds of the domain.
+
+        Args:
+            y: Terms of the eikonal equation.
+            x_ref: Horizontal reference.
+            bathymetry: Bathymetry object.
+
+        Returns:
+            float: The minimum distance between the ray and the domain bounds.
+        """
         return np.min(
             [
                 y[0] + x_ref - bathymetry.distance[0],
@@ -118,6 +139,16 @@ class MaxTimeReached(Event):
 
     @staticmethod
     def _max_time_reached(y, tau_ref: float, t_max: float = 1e10) -> float:
+        """Check if the ray has reached the maximum time.
+
+        Args:
+            y: Terms of the eikonal equation.
+            tau_ref: Time reference.
+            t_max: Maximum time.
+
+        Returns:
+            float: The difference between the ray time and the maximum time.
+        """
         return t_max - (y[4] + tau_ref)
 
 
@@ -142,6 +173,15 @@ class SurfaceReflection(Event):
 
     @staticmethod
     def _surface_reflection(y, z_ref: float) -> float:
+        """Check if the ray has reached the sea surface.
+
+        Args:
+            y: Terms of the eikonal equation.
+            z_ref: Depth reference.
+
+        Returns:
+            float: The difference between the ray depth and the sea level.
+        """
         return y[2] + z_ref - env.SeaSurface.LEVEL
 
 
@@ -167,6 +207,16 @@ class ZeroDepthReached(Event):
 
     @staticmethod
     def _zero_depth(y, x_ref: float, bathymetry: env.Bathymetry) -> float:
+        """Check if the ray has reached zero depth.
+
+        Args:
+            y: Terms of the eikonal equation.
+            x_ref: Horizontal reference.
+            bathymetry: Bathymetry object.
+
+        Returns:
+            float: The difference between the ray depth and zero depth.
+        """
         return bathymetry(y[0] + x_ref)
 
 
