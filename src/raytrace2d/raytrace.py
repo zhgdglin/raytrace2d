@@ -61,6 +61,19 @@ class Ray:
     def plot(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
         return rplt.plot_ray(self.x, self.z, ax=ax, *args, **kwargs)
 
+    def plot_slowness(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
+        return rplt.plot_ray(self.x, self.slw, ax=ax, *args, **kwargs)
+
+    def plot_slowness_xgrad(
+        self, ax: Optional[plt.Axes] = None, *args, **kwargs
+    ) -> plt.Axes:
+        return rplt.plot_ray(self.x, self.dslwdx, ax=ax, *args, **kwargs)
+
+    def plot_slowness_zgrad(
+        self, ax: Optional[plt.Axes] = None, *args, **kwargs
+    ) -> plt.Axes:
+        return rplt.plot_ray(self.x, self.dslwdz, ax=ax, *args, **kwargs)
+
     @property
     def num_reflections(self) -> int:
         return len(self.reflections) if self.reflections is not None else 0
@@ -314,7 +327,7 @@ class RayTrace:
     def plot_eigenrays(
         self, ax: Optional[plt.Axes] = None, *args, **kwargs
     ) -> plt.Axes:
-        return rplt.plot_eigenrays(self.eigenrays, ax=ax, *args, **kwargs)
+        return rplt.plot_rays(self.eigenrays, ax=ax, *args, **kwargs)
 
     def plot_rays(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
         return rplt.plot_rays(self.rays, ax=ax, *args, **kwargs)
