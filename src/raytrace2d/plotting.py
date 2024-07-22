@@ -47,13 +47,20 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
         "ncols": 2,
         "gridspec_kw": {"width_ratios": [1, 4], "wspace": 0.0},
     }
-
     SSP_KW = {
         "c": "tab:blue",
     }
-
     RAY_KW = {
         "c": "tab:blue",
+    }
+    SRC_KW = {
+        "c": "tab:red",
+    }
+    RX_KW = {
+        "c": "tab:red",
+    }
+    BATHY_KW = {
+        "c": "k",
     }
     max_depth = raytrace.bathymetry.water_depth.max()
     zvec = np.linspace(0, max_depth, 1001)
@@ -70,13 +77,13 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
 
     ax = axs[1]
     ax = plot_rays(raytrace.rays, ax=ax, **RAY_KW, zorder=1)
-    ax.plot(raytrace.source.distance, raytrace.source.depth, "r*")
+    ax.plot(raytrace.source.distance, raytrace.source.depth, **SRC_KW)
     if raytrace.eigenrays:
         ax = plot_rays(raytrace.eigenrays, c="r", ax=ax, zorder=2)
-        ax.plot(raytrace.receiver.distance, raytrace.receiver.depth, "ro")
+        ax.plot(raytrace.receiver.distance, raytrace.receiver.depth, **RX_KW)
 
     ax = plot_bathymetry(
-        raytrace.bathymetry.distance, raytrace.bathymetry.water_depth, c="k", ax=ax
+        raytrace.bathymetry.distance, raytrace.bathymetry.water_depth, ax=ax, **BATHY_KW
     )
     ax.set_xlim(-10, max(raytrace.bathymetry.distance) + 10)
     ax.set_ylim(0, max_depth)
