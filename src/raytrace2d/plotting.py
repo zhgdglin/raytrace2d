@@ -49,11 +49,11 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
     }
 
     SSP_KW = {
-        "c": "k",
+        "c": "tab:blue",
     }
 
     RAY_KW = {
-        "c": "k",
+        "c": "tab:blue",
     }
     max_depth = raytrace.bathymetry.water_depth.max()
     zvec = np.linspace(0, max_depth, 1001)
@@ -70,13 +70,13 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
 
     ax = axs[1]
     ax = plot_rays(raytrace.rays, ax=ax, **RAY_KW, zorder=1)
+    ax.plot(raytrace.source.distance, raytrace.source.depth, "r*")
     if raytrace.eigenrays:
         ax = plot_rays(raytrace.eigenrays, c="r", ax=ax, zorder=2)
-        ax.plot(raytrace.source.distance, raytrace.source.depth, "r*")
         ax.plot(raytrace.receiver.distance, raytrace.receiver.depth, "ro")
 
     ax = plot_bathymetry(
-        raytrace.bathymetry.distance, raytrace.bathymetry.water_depth, ax=ax
+        raytrace.bathymetry.distance, raytrace.bathymetry.water_depth, c="k", ax=ax
     )
     ax.set_xlim(-10, max(raytrace.bathymetry.distance) + 10)
     ax.set_ylim(0, max_depth)
