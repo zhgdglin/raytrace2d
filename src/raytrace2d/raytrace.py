@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from enum import Enum

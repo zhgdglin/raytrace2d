@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from typing import Optional, Protocol
 
 import matplotlib.pyplot as plt

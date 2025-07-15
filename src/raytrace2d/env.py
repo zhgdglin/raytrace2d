@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Module provides classes for the environment in which the ray trace occurs.
 The environment includes the bathymetry, sea surface, sound speed profile,
 source, and receiver.

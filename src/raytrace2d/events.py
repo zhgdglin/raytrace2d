@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Module provides classes for events that terminate the ray trace."""
 
 from abc import ABC, abstractmethod
