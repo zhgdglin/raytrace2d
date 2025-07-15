@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools >= 80.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "raytrace"
+version = "0.0.1"
+description = "2D underwater acoustic ray tracing code."
+authors = [
+    { name = "William F. Jenkins", email = "wfjenkins@ucsd.edu" }
+]
+dependencies = ["matplotlib", "numpy", "scipy", "tqdm"]
+requires-python = ">= 3.12"
+
+[tool.setuptools.packages.find]
+where = ["src"]
