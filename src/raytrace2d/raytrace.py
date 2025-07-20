@@ -127,33 +127,53 @@ class RayTrace:
     def _filter_rays(rays: list[Ray], ptype: str) -> list[Ray]:
         return [ray for ray in rays if ray.path_phase == ptype]
 
-    def find_eigenrays(self) -> list[Eigenray]:
+    def _intersect_and_reorder_rays(
+        self, rays: list[Ray]
+    ) -> tuple[list[Ray], Optional[int], Optional[int]]:
+        sorted_ind, last_negative_index, first_positive_index = self._get_intersection(
+            rays, self.receiver
+        )
+        rays = [rays[i] for i in sorted_ind]
+        return rays, last_negative_index, first_positive_index
+
+    def find_eigenrays(
+        self,
+        xtol: float = 2e-12,
+        rtol: float = np.float64(8.881784197001252e-16),
+        maxiter: int = 100,
+    ) -> list[Eigenray]:
         pbar_kw = {
             "total": len(PathPhase),
             "desc": "Finding eigenrays",
             "unit": "ray",
             "bar_format": "{l_bar}{bar:20}{r_bar}{bar:-20b}",
         }
-        with ProcessPoolExecutor(max_workers=2) as executor:
+        with ProcessPoolExecutor(max_workers=7) as executor:
             eigenrays = list(
                 tqdm(
                     executor.map(
                         self._find_eigenrays_by_ptype,
                         [p.value for p in PathPhase],
+                        [xtol] * len(PathPhase),
+                        [rtol] * len(PathPhase),
+                        [maxiter] * len(PathPhase),
                     ),
                     **pbar_kw,
                 )
             )
-        # eigenrays = [
-        #     self._find_eigenrays_by_ptype(ptype.value)
-        #     for ptype in tqdm(PathPhase, **pbar_kw)
-        # ]
+
         if all(ray is None for ray in eigenrays):
             logging.debug("Eigenrays not found.")
             return None
         return [ray for ray in eigenrays if ray is not None]
 
-    def _find_eigenrays_by_ptype(self, ptype: str) -> None:
+    def _find_eigenrays_by_ptype(
+        self,
+        ptype: str,
+        xtol: float = 2e-12,
+        rtol: float = np.float64(8.881784197001252e-16),
+        maxiter: int = 100,
+    ) -> None:
         logging.debug(
             "=" * 80 + f"\nSearching for eigenray with path type `{ptype}`..."
         )
@@ -187,13 +207,12 @@ class RayTrace:
             logging.debug(f"Eigenray not found for path type `{ptype}`.")
             return
 
-        # rays = new_rays
-        last_negative_index, first_positive_index = self._get_intersection(
-            rays, self.receiver
+        rays, last_negative_index, first_positive_index = (
+            self._intersect_and_reorder_rays(rays)
         )
 
         logging.debug(
-            f"First (+) index: {first_positive_index} | Last (-) index: {last_negative_index}"
+            f"Last (-) index: {last_negative_index} | First (+) index: {first_positive_index}"
         )
         new_angles = np.array([0, 0])
         num_rays = 8
@@ -222,8 +241,8 @@ class RayTrace:
                 angle_lim = new_angles[0]
                 attempt += 1
                 continue
-            last_negative_index, first_positive_index = self._get_intersection(
-                rays, self.receiver
+            rays, last_negative_index, first_positive_index = (
+                self._intersect_and_reorder_rays(rays)
             )
             angle_lim = rays[first_positive_index].launch_angle
             logging.debug(
@@ -250,8 +269,8 @@ class RayTrace:
                 angle_lim = new_angles[-1]
                 attempt += 1
                 continue
-            last_negative_index, first_positive_index = self._get_intersection(
-                rays, self.receiver
+            rays, last_negative_index, first_positive_index = (
+                self._intersect_and_reorder_rays(rays)
             )
             angle_lim = rays[last_negative_index].launch_angle
             logging.debug(
@@ -266,7 +285,14 @@ class RayTrace:
 
         lower_angle = rays[last_negative_index].launch_angle
         upper_angle = rays[first_positive_index].launch_angle
-        er_launch = self._find_roots((lower_angle, upper_angle))
+        logging.debug(
+            f"Last (-) index: {last_negative_index} | First (+) index: {first_positive_index}"
+        )
+        logging.debug(f"Launch angle bounds: {lower_angle}, {upper_angle}")
+
+        er_launch = self._find_roots(
+            (lower_angle, upper_angle), xtol=xtol, rtol=rtol, maxiter=maxiter
+        )
         ray = self.trace_ray(er_launch)
         depth_diff = self._depth_difference(ray, self.receiver)
         logging.debug(f"Eigenray found: {er_launch}")
@@ -317,13 +343,19 @@ class RayTrace:
     def _find_roots(
         self,
         angle_bounds: tuple[float],
+        xtol: float = 2e-12,
+        rtol: float = np.float64(8.881784197001252e-16),
+        maxiter: int = 100,
     ) -> float:
         def f(angle: float) -> float:
             logging.debug(f"Trying angle {angle}...")
             ray = self.trace_ray(angle)
             return self._depth_difference(ray, self.receiver)
 
-        return brentq(f, *angle_bounds, xtol=0.25)
+        logging.debug(
+            f"Objective function output: {f(angle_bounds[0])}, {f(angle_bounds[1])}"
+        )
+        return brentq(f, *angle_bounds, xtol=xtol, rtol=rtol, maxiter=maxiter)
 
     def _get_intersection(
         self, rays: list[Ray], receiver: env.Receiver
@@ -334,12 +366,19 @@ class RayTrace:
             ind = np.argmin(np.abs(ray.x - receiver.distance))
             zind[i] = ind
             ray_depth[i] = ray.z[ind]
-            logging.debug(f"Ray depth = {ray_depth[i]}")
+            logging.debug(
+                f"Ray depth = {ray_depth[i]}, launch angle = {ray.launch_angle}"
+            )
 
-        new_ind = np.argsort(ray_depth)
-        zind = zind[new_ind]
-        ray_depth = ray_depth[new_ind]
-        return self._find_indices(ray_depth - receiver.depth)
+        sorted_ind = np.argsort(ray_depth)
+        sorted_ray_depth = ray_depth[sorted_ind]
+        logging.debug(
+            f"Ray depth: {sorted_ray_depth}, Receiver depth: {receiver.depth}"
+        )
+        last_negative_index, first_positive_index = self._find_indices(
+            sorted_ray_depth - receiver.depth
+        )
+        return sorted_ind, last_negative_index, first_positive_index
 
     @staticmethod
     def _get_reflection(
@@ -377,13 +416,15 @@ class RayTrace:
     def _initialize_references(self) -> tuple[float, float, float, float]:
         return self.source.depth, self.source.distance, 0.0, 0.0
 
-    def plot(self) -> plt.Axes:
-        return rplt.plot_ray_trace(self)
+    def plot(self, only_eig: bool = False) -> plt.Figure:
+        return rplt.plot_ray_trace(self, only_eig)
 
     def plot_eigenrays(
         self, ax: Optional[plt.Axes] = None, *args, **kwargs
     ) -> plt.Axes:
-        return rplt.plot_rays(self.eigenrays, ax=ax, *args, **kwargs)
+        ax = rplt.plot_rays(self.eigenrays, ax=ax, *args, **kwargs)
+        ax.plot(self.receiver.distance, self.receiver.depth, "rx")
+        return ax
 
     def plot_rays(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
         return rplt.plot_rays(self.rays, ax=ax, *args, **kwargs)
@@ -427,6 +468,9 @@ class RayTrace:
         max_bottom_bounce: int = 9999,
         num_workers: int = 16,
         eigenrays: bool = False,
+        xtol: float = 2e-12,
+        rtol: float = np.float64(8.881784197001252e-16),
+        maxiter: int = 100,
     ) -> tuple[list[Ray], Optional[list[Eigenray]]]:
         if type(angles) is float:
             angles = [angles]
@@ -437,7 +481,7 @@ class RayTrace:
         if eigenrays and self.receiver is None:
             raise ValueError("Receiver must be defined to find eigenrays.")
         if eigenrays:
-            self.eigenrays = self.find_eigenrays()
+            self.eigenrays = self.find_eigenrays(xtol=xtol, rtol=rtol, maxiter=maxiter)
             return self.rays, self.eigenrays
         return self.rays, None
 
