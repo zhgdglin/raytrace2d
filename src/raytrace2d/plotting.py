@@ -17,7 +17,7 @@ def plot_bathymetry(
     water_depth: np.ndarray,
     ax: Optional[plt.Axes] = None,
     *args,
-    **kwargs
+    **kwargs,
 ) -> plt.Axes:
     if ax is None:
         ax = plt.gca()
@@ -30,7 +30,7 @@ def plot_ray(
     ind_var: np.ndarray,
     ax: Optional[plt.Axes] = None,
     *args,
-    **kwargs
+    **kwargs,
 ) -> plt.Axes:
     if ax is None:
         ax = plt.gca()
@@ -38,12 +38,13 @@ def plot_ray(
     return ax
 
 
-def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
+def plot_ray_trace(raytrace: RayTrace, only_eig: bool = False) -> plt.Figure:
     FIG_KW = {
         "figsize": (12, 4),
         "nrows": 1,
         "ncols": 2,
         "gridspec_kw": {"width_ratios": [1, 4], "wspace": 0.0},
+        "sharey": True,
     }
     SSP_KW = {
         "c": "tab:blue",
@@ -76,11 +77,13 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
     ax.tick_params(top=True, labeltop=True, bottom=False, labelbottom=False)
 
     ax = axs[1]
-    ax = plot_rays(raytrace.rays, ax=ax, **RAY_KW, zorder=1)
-    ax.plot(raytrace.source.distance, raytrace.source.depth, **SRC_KW)
     if raytrace.eigenrays:
         ax = plot_rays(raytrace.eigenrays, c="r", ax=ax, zorder=2)
         ax.plot(raytrace.receiver.distance, raytrace.receiver.depth, **RX_KW)
+    if (raytrace.eigenrays and not only_eig) or (not raytrace.eigenrays):
+        ax = plot_rays(raytrace.rays, ax=ax, **RAY_KW, zorder=1)
+
+    ax.plot(raytrace.source.distance, raytrace.source.depth, **SRC_KW)
 
     ax = plot_bathymetry(
         raytrace.bathymetry.distance, raytrace.bathymetry.water_depth, ax=ax, **BATHY_KW
@@ -88,7 +91,14 @@ def plot_ray_trace(raytrace: RayTrace) -> plt.Figure:
     ax.set_xlim(-10, max(raytrace.bathymetry.distance) + 10)
     ax.set_ylim(0, max_depth)
     ax.invert_yaxis()
-    ax.set_yticklabels([])
+    ax.tick_params(
+        top=False,
+        labeltop=False,
+        bottom=True,
+        labelbottom=True,
+        left=False,
+        labelleft=False,
+    )
     ax.set_xlabel("Range [m]")
 
     return fig
