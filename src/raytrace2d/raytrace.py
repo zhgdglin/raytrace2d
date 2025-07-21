@@ -105,7 +105,6 @@ class RayTrace:
         self.bathymetry: env.Bathymetry = bathymetry
         self.source: env.Source = source
         self.receiver: env.Receiver = receiver
-        self.reflections: list[Union[None, Reflection]] = []
         self.rays: list[Ray] = []
         self.eigenrays: list[Eigenray] = []
 
@@ -148,19 +147,25 @@ class RayTrace:
             "unit": "ray",
             "bar_format": "{l_bar}{bar:20}{r_bar}{bar:-20b}",
         }
-        with ProcessPoolExecutor(max_workers=7) as executor:
-            eigenrays = list(
-                tqdm(
-                    executor.map(
-                        self._find_eigenrays_by_ptype,
-                        [p.value for p in PathPhase],
-                        [xtol] * len(PathPhase),
-                        [rtol] * len(PathPhase),
-                        [maxiter] * len(PathPhase),
-                    ),
-                    **pbar_kw,
-                )
+        # with ProcessPoolExecutor(max_workers=7) as executor:
+        #     eigenrays = list(
+        #         tqdm(
+        #             executor.map(
+        #                 self._find_eigenrays_by_ptype,
+        #                 [p.value for p in PathPhase],
+        #                 [xtol] * len(PathPhase),
+        #                 [rtol] * len(PathPhase),
+        #                 [maxiter] * len(PathPhase),
+        #             ),
+        #             **pbar_kw,
+        #         )
+        #     )
+        eigenrays = [
+            self._find_eigenrays_by_ptype(
+                ptype.value, xtol=xtol, rtol=rtol, maxiter=maxiter
             )
+            for ptype in tqdm(PathPhase, **pbar_kw)
+        ]
 
         if all(ray is None for ray in eigenrays):
             logging.debug("Eigenrays not found.")
@@ -510,6 +515,7 @@ class RayTrace:
         tang = np.array([])  # ray tangent angle
         num_btm_bnc = 0
 
+        reflections = []
         while True:
             # recall: y = [x, dxi/ds, z, dzeta/ds, tau]
             y0 = np.array([x0 - x_ref, xi0, z0 - z_ref, zeta0, tau0 - tau_ref]).T
@@ -543,7 +549,7 @@ class RayTrace:
 
             if event_id == events.Events.SURFACE_REFLECTION.value:
                 normal = env.SeaSurface().NORMAL
-                self.reflections.append(
+                reflections.append(
                     self._get_reflection(
                         z_ref, x_ref, s_ref, min_t, event_y, normal, PathPhase.S.value
                     )
@@ -551,7 +557,7 @@ class RayTrace:
             if event_id == events.Events.BOTTOM_REFLECTION.value:
                 num_btm_bnc += 1
                 normal = self.bathymetry.normal_vector(distance=x_ref)
-                self.reflections.append(
+                reflections.append(
                     self._get_reflection(
                         z_ref,
                         x_ref,
@@ -610,5 +616,5 @@ class RayTrace:
                 [self.profile.slowness_gradient(ze, xe)[0] for ze, xe in zip(z, x)]
             ),
             launch_angle=angle,
-            reflections=self.reflections,
+            reflections=reflections,
         )
