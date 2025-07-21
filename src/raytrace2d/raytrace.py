@@ -1,6 +1,6 @@
 """Module for 2D ray tracing."""
 
-from collections.abc import Iterable
+from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
@@ -10,6 +10,7 @@ from typing import Protocol
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import numpy as np
+from numpy.typing import NDArray
 from scipy.integrate import solve_ivp
 from scipy.optimize import brentq
 from tqdm import tqdm
@@ -35,7 +36,7 @@ class PathPhase(StrEnum):
 
 @dataclass
 class SoundSpeedProfile(Protocol):
-    def query(self, position: float | np.ndarray) -> float | np.ndarray: ...
+    def query(self, position: float | Sequence) -> float | NDArray: ...
 
 
 @dataclass
@@ -50,14 +51,14 @@ class Reflection:
 
 @dataclass
 class Ray:
-    x: np.ndarray
-    z: np.ndarray
-    s: np.ndarray
-    tau: np.ndarray
-    tang: np.ndarray
-    slw: np.ndarray
-    dslwdx: np.ndarray
-    dslwdz: np.ndarray
+    x: NDArray
+    z: NDArray
+    s: NDArray
+    tau: NDArray
+    tang: NDArray
+    slw: NDArray
+    dslwdx: NDArray
+    dslwdz: NDArray
     launch_angle: float
     reflections: list[Reflection] | None = None
 
@@ -316,7 +317,7 @@ class RayTrace:
         )
 
     @staticmethod
-    def _find_event(t_events: list[np.ndarray | None]) -> tuple[int, float]:
+    def _find_event(t_events: list[NDArray | None]) -> tuple[int, float]:
         min_t = 0.0
         for aid, t_event in enumerate(t_events):
             if len(t_event) > 0 and t_event[0] > min_t:
@@ -325,7 +326,7 @@ class RayTrace:
         return event_id, min_t
 
     @staticmethod
-    def _find_indices(array: np.ndarray) -> tuple[int | None, int | None]:
+    def _find_indices(array: NDArray) -> tuple[int | None, int | None]:
         # Ensure the array is a NumPy array
         array = np.array(array)
 
@@ -387,7 +388,7 @@ class RayTrace:
 
     @staticmethod
     def _get_reflection(
-        z_ref, x_ref, s_ref, min_t, event_y, normal_vec: np.ndarray, interface: str
+        z_ref, x_ref, s_ref, min_t, event_y, normal_vec: NDArray, interface: str
     ) -> Reflection:
         return Reflection(
             depth=float(event_y[2] + z_ref),
@@ -434,7 +435,7 @@ class RayTrace:
 
     def ray_trace(
         self,
-        angles: float | Iterable[float],
+        angles: float | Sequence[float],
         ds: float = 10.0,
         max_bottom_bounce: int = 9999,
         num_workers: int = 16,
@@ -461,12 +462,12 @@ class RayTrace:
             )
 
     @staticmethod
-    def _reflect(ei: np.ndarray, normal: np.ndarray) -> np.ndarray:
+    def _reflect(ei: NDArray, normal: NDArray) -> NDArray:
         return ei - 2 * np.dot(ei, normal) * normal
 
     def run(
         self,
-        angles: float | Iterable[float] = np.linspace(-80, 80, 41),
+        angles: float | Sequence[float] = np.linspace(-80, 80, 41),
         ds: float = 10.0,
         max_bottom_bounce: int = 9999,
         num_workers: int = 16,
