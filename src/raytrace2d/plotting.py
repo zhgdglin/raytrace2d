@@ -1,7 +1,12 @@
-from typing import Optional, Protocol
+"""Module for plotting ray tracing results."""
 
+from typing import Protocol
+
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.typing import ArrayLike
 
 
 class Ray(Protocol):
@@ -13,12 +18,12 @@ class RayTrace(Protocol):
 
 
 def plot_bathymetry(
-    distance: np.ndarray,
-    water_depth: np.ndarray,
-    ax: Optional[plt.Axes] = None,
+    distance: ArrayLike,
+    water_depth: ArrayLike,
+    ax: Axes | None = None,
     *args,
     **kwargs,
-) -> plt.Axes:
+) -> Axes:
     if ax is None:
         ax = plt.gca()
     ax.plot(distance, water_depth, *args, **kwargs)
@@ -26,19 +31,19 @@ def plot_bathymetry(
 
 
 def plot_ray(
-    dep_var: np.ndarray,
-    ind_var: np.ndarray,
-    ax: Optional[plt.Axes] = None,
+    dep_var: ArrayLike,
+    ind_var: ArrayLike,
+    ax: Axes | None = None,
     *args,
     **kwargs,
-) -> plt.Axes:
+) -> Axes:
     if ax is None:
         ax = plt.gca()
     ax.plot(dep_var, ind_var, *args, **kwargs)
     return ax
 
 
-def plot_ray_trace(raytrace: RayTrace, only_eig: bool = False) -> plt.Figure:
+def plot_ray_trace(raytrace: RayTrace, only_eig: bool = False) -> Figure:
     FIG_KW = {
         "figsize": (12, 4),
         "nrows": 1,
@@ -104,9 +109,7 @@ def plot_ray_trace(raytrace: RayTrace, only_eig: bool = False) -> plt.Figure:
     return fig
 
 
-def plot_rays(
-    rays: list[Ray], ax: Optional[plt.Axes] = None, *args, **kwargs
-) -> plt.Axes:
+def plot_rays(rays: list[Ray], ax: Axes | None = None, *args, **kwargs) -> Axes:
     if ax is None:
         ax = plt.gca()
     for ray in rays:
@@ -115,12 +118,12 @@ def plot_rays(
 
 
 def plot_slowness(
-    depth: np.ndarray,
-    speed: np.ndarray,
-    slowness: np.ndarray,
-    dsdz: np.ndarray,
-    dsdx: np.ndarray,
-) -> plt.Figure:
+    depth: ArrayLike,
+    speed: ArrayLike,
+    slowness: ArrayLike,
+    dsdz: ArrayLike,
+    dsdx: ArrayLike,
+) -> Figure:
 
     fig, axs = plt.subplots(
         figsize=(8, 6), nrows=1, ncols=4, gridspec_kw={"wspace": 0.2}
@@ -158,8 +161,8 @@ def plot_slowness(
 
 
 def plot_ssp(
-    speed: np.ndarray, depth: np.ndarray, ax: Optional[plt.Axes] = None, *args, **kwargs
-) -> plt.Axes:
+    speed: ArrayLike, depth: ArrayLike, ax: Axes | None = None, *args, **kwargs
+) -> Axes:
     if ax is None:
         ax = plt.gca()
     ax.plot(speed, depth, *args, **kwargs)
