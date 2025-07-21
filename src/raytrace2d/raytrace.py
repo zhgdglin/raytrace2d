@@ -5,8 +5,8 @@ from enum import Enum
 import logging
 from typing import Protocol
 
-from matplotlib import Axes, Figure
-import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import brentq
