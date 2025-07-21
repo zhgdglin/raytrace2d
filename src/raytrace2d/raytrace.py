@@ -1,7 +1,9 @@
+"""Module for 2D ray tracing."""
+
 from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 import logging
 from typing import Protocol
 
@@ -21,7 +23,7 @@ DEG2RAD = np.pi / 180.0
 RAD2DEG = 180.0 / np.pi
 
 
-class PathPhase(Enum):
+class PathPhase(StrEnum):
     D = "d"
     B = "b"
     S = "s"
@@ -78,7 +80,7 @@ class Ray:
     @property
     def path_phase(self) -> str:
         if self.num_reflections == 0:
-            return PathPhase.D.value
+            return PathPhase.D
         phase_path = ""
         for reflection in self.reflections:
             phase_path += reflection.interface
@@ -150,7 +152,7 @@ class RayTrace:
                 tqdm(
                     executor.map(
                         self._find_eigenrays_by_ptype,
-                        [p.value for p in PathPhase],
+                        [p for p in PathPhase],
                         [xtol] * len(PathPhase),
                         [rtol] * len(PathPhase),
                         [maxiter] * len(PathPhase),
@@ -547,7 +549,7 @@ class RayTrace:
                 normal = env.SeaSurface().NORMAL
                 reflections.append(
                     self._get_reflection(
-                        z_ref, x_ref, s_ref, min_t, event_y, normal, PathPhase.S.value
+                        z_ref, x_ref, s_ref, min_t, event_y, normal, PathPhase.S
                     )
                 )
             if event_id == events.Events.BOTTOM_REFLECTION.value:
@@ -561,7 +563,7 @@ class RayTrace:
                         min_t,
                         event_y,
                         normal,
-                        PathPhase.B.value,
+                        PathPhase.B,
                     )
                 )
                 if num_btm_bnc >= max_bottom_bounce:
