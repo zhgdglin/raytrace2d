@@ -1,9 +1,11 @@
+from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 import logging
-from typing import Iterable, Optional, Protocol, Union
+from typing import Protocol
 
+from matplotlib import Axes, Figure
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -31,7 +33,7 @@ class PathPhase(Enum):
 
 @dataclass
 class SoundSpeedProfile(Protocol):
-    def query(self, position: Union[float, np.ndarray]) -> Union[float, np.ndarray]: ...
+    def query(self, position: float | np.ndarray) -> float | np.ndarray: ...
 
 
 @dataclass
@@ -55,22 +57,18 @@ class Ray:
     dslwdx: np.ndarray
     dslwdz: np.ndarray
     launch_angle: float
-    reflections: Optional[list[Reflection]] = None
+    reflections: list[Reflection] | None = None
 
-    def plot(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
+    def plot(self, ax: Axes | None = None, *args, **kwargs) -> Axes:
         return rplt.plot_ray(self.x, self.z, ax=ax, *args, **kwargs)
 
-    def plot_slowness(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
+    def plot_slowness(self, ax: Axes | None = None, *args, **kwargs) -> Axes:
         return rplt.plot_ray(self.x, self.slw, ax=ax, *args, **kwargs)
 
-    def plot_slowness_xgrad(
-        self, ax: Optional[plt.Axes] = None, *args, **kwargs
-    ) -> plt.Axes:
+    def plot_slowness_xgrad(self, ax: Axes | None = None, *args, **kwargs) -> Axes:
         return rplt.plot_ray(self.x, self.dslwdx, ax=ax, *args, **kwargs)
 
-    def plot_slowness_zgrad(
-        self, ax: Optional[plt.Axes] = None, *args, **kwargs
-    ) -> plt.Axes:
+    def plot_slowness_zgrad(self, ax: Axes | None = None, *args, **kwargs) -> Axes:
         return rplt.plot_ray(self.x, self.dslwdz, ax=ax, *args, **kwargs)
 
     @property
@@ -99,7 +97,7 @@ class RayTrace:
         profile: SoundSpeedProfile,
         bathymetry: env.Bathymetry,
         source: env.Source,
-        receiver: env.Receiver = Optional[None],
+        receiver: env.Receiver | None = None,
     ):
         self.profile: SoundSpeedProfile = profile
         self.bathymetry: env.Bathymetry = bathymetry
@@ -128,7 +126,7 @@ class RayTrace:
 
     def _intersect_and_reorder_rays(
         self, rays: list[Ray]
-    ) -> tuple[list[Ray], Optional[int], Optional[int]]:
+    ) -> tuple[list[Ray], int | None, int | None]:
         sorted_ind, last_negative_index, first_positive_index = self._get_intersection(
             rays, self.receiver
         )
@@ -147,25 +145,25 @@ class RayTrace:
             "unit": "ray",
             "bar_format": "{l_bar}{bar:20}{r_bar}{bar:-20b}",
         }
-        # with ProcessPoolExecutor(max_workers=7) as executor:
-        #     eigenrays = list(
-        #         tqdm(
-        #             executor.map(
-        #                 self._find_eigenrays_by_ptype,
-        #                 [p.value for p in PathPhase],
-        #                 [xtol] * len(PathPhase),
-        #                 [rtol] * len(PathPhase),
-        #                 [maxiter] * len(PathPhase),
-        #             ),
-        #             **pbar_kw,
-        #         )
-        #     )
-        eigenrays = [
-            self._find_eigenrays_by_ptype(
-                ptype.value, xtol=xtol, rtol=rtol, maxiter=maxiter
+        with ProcessPoolExecutor(max_workers=7) as executor:
+            eigenrays = list(
+                tqdm(
+                    executor.map(
+                        self._find_eigenrays_by_ptype,
+                        [p.value for p in PathPhase],
+                        [xtol] * len(PathPhase),
+                        [rtol] * len(PathPhase),
+                        [maxiter] * len(PathPhase),
+                    ),
+                    **pbar_kw,
+                )
             )
-            for ptype in tqdm(PathPhase, **pbar_kw)
-        ]
+        # eigenrays = [
+        #     self._find_eigenrays_by_ptype(
+        #         ptype.value, xtol=xtol, rtol=rtol, maxiter=maxiter
+        #     )
+        #     for ptype in tqdm(PathPhase, **pbar_kw)
+        # ]
 
         if all(ray is None for ray in eigenrays):
             logging.debug("Eigenrays not found.")
@@ -178,7 +176,7 @@ class RayTrace:
         xtol: float = 2e-12,
         rtol: float = np.float64(8.881784197001252e-16),
         maxiter: int = 100,
-    ) -> None:
+    ) -> Eigenray | None:
         logging.debug(
             "=" * 80 + f"\nSearching for eigenray with path type `{ptype}`..."
         )
@@ -316,7 +314,7 @@ class RayTrace:
         )
 
     @staticmethod
-    def _find_event(t_events: list[Union[None, np.ndarray]]) -> tuple[int, float]:
+    def _find_event(t_events: list[np.ndarray | None]) -> tuple[int, float]:
         min_t = 0.0
         for aid, t_event in enumerate(t_events):
             if len(t_event) > 0 and t_event[0] > min_t:
@@ -325,7 +323,7 @@ class RayTrace:
         return event_id, min_t
 
     @staticmethod
-    def _find_indices(array: np.ndarray) -> tuple[Optional[int], Optional[int]]:
+    def _find_indices(array: np.ndarray) -> tuple[int | None, int | None]:
         # Ensure the array is a NumPy array
         array = np.array(array)
 
@@ -421,27 +419,25 @@ class RayTrace:
     def _initialize_references(self) -> tuple[float, float, float, float]:
         return self.source.depth, self.source.distance, 0.0, 0.0
 
-    def plot(self, only_eig: bool = False) -> plt.Figure:
+    def plot(self, only_eig: bool = False) -> Figure:
         return rplt.plot_ray_trace(self, only_eig)
 
-    def plot_eigenrays(
-        self, ax: Optional[plt.Axes] = None, *args, **kwargs
-    ) -> plt.Axes:
+    def plot_eigenrays(self, ax: Axes | None = None, *args, **kwargs) -> Axes:
         ax = rplt.plot_rays(self.eigenrays, ax=ax, *args, **kwargs)
         ax.plot(self.receiver.distance, self.receiver.depth, "rx")
         return ax
 
-    def plot_rays(self, ax: Optional[plt.Axes] = None, *args, **kwargs) -> plt.Axes:
+    def plot_rays(self, ax: Axes | None = None, *args, **kwargs) -> Axes:
         return rplt.plot_rays(self.rays, ax=ax, *args, **kwargs)
 
     def ray_trace(
         self,
-        angles: Union[float, Iterable[float]],
+        angles: float | Iterable[float],
         ds: float = 10.0,
         max_bottom_bounce: int = 9999,
         num_workers: int = 16,
         display: bool = False,
-    ):
+    ) -> list[Ray]:
         pbar_kw = {
             "total": len(angles),
             "desc": "Tracing rays",
@@ -468,7 +464,7 @@ class RayTrace:
 
     def run(
         self,
-        angles: Union[float, Iterable[float]] = np.linspace(-80, 80, 41),
+        angles: float | Iterable[float] = np.linspace(-80, 80, 41),
         ds: float = 10.0,
         max_bottom_bounce: int = 9999,
         num_workers: int = 16,
@@ -476,7 +472,7 @@ class RayTrace:
         xtol: float = 2e-12,
         rtol: float = np.float64(8.881784197001252e-16),
         maxiter: int = 100,
-    ) -> tuple[list[Ray], Optional[list[Eigenray]]]:
+    ) -> tuple[list[Ray], list[Eigenray] | None]:
         if type(angles) is float:
             angles = [angles]
 
